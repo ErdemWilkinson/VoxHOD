@@ -1,0 +1,11 @@
+# Datasets and trained models are large or regenerable; never pushed.
+data/
+artifacts*/*
+!artifacts*/evaluation.json
+!artifacts*/history.json
+!artifacts*/history_qat.json
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
