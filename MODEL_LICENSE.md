@@ -2,7 +2,7 @@
 
 The **code** in this repository is MIT licensed (see `LICENSE`).
 
-The **trained voxOCR weights** (`voxocr.keras`, `voxocr_int8.tflite`,
+The **trained VoxHOD weights** (`voxocr.keras`, `voxocr_int8.tflite`,
 `voxocr_qat_int8.tflite`) are released under **CC BY 4.0**. They were trained
 only on:
 
@@ -16,6 +16,6 @@ International Journal of Computer Vision, 2019.
 
 ## Intended use
 
-voxOCR is built for **search and rescue**, to help find missing or injured
+VoxHOD is built for **search and rescue**, to help find missing or injured
 people. It is not designed or licensed by the author for weapon targeting or
 for harming people.

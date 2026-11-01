@@ -1,6 +1,6 @@
-# voxOCR
+# VoxHOD
 
-**voxOCR** is a tiny person detector for **drone search and rescue**,
+**VoxHOD** is a tiny person detector for **drone search and rescue**,
 small enough for an ESP32-S3-class microcontroller: 136,547 parameters and a
 **197 KB full-int8 TensorFlow Lite** file. It looks at a 160×160 RGB tile
 from a downward-looking camera and marks where people are, so a drone can
@@ -130,7 +130,7 @@ rises from 0.558 to 0.569 (float: 0.560 to 0.593). Results:
 
 Code: [MIT](LICENSE). Trained weights: CC BY 4.0 with HERIDAL attribution;
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
-[inviolus/voxOCR](https://huggingface.co/inviolus/voxOCR).
+[inviolus/VoxHOD](https://huggingface.co/inviolus/VoxHOD).
 
-voxOCR is built for search and rescue, to help find people who need help.
+VoxHOD is built for search and rescue, to help find people who need help.
 It is not intended for targeting or harming people.
