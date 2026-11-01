@@ -199,6 +199,9 @@ def main() -> None:
     train, val = dataset(train_images, train_targets, True), dataset(val_images, val_targets, False)
 
     model = build_model()
+    if os.environ.get("VOX_WARM_START"):  # continue from an earlier voxocr.keras
+        model.set_weights(tf.keras.models.load_model(os.environ["VOX_WARM_START"], compile=False).get_weights())
+        print(f"Warm start from {os.environ['VOX_WARM_START']}", flush=True)
     print(f"voxOCR parameters: {model.count_params():,}", flush=True)
     history = fit(model, train, val, 2e-3, float(os.environ.get("VOX_MAX_MINUTES", 60)))
     model.save(ARTIFACTS / "voxocr.keras")
