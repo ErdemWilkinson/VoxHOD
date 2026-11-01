@@ -96,6 +96,19 @@ Only flagged tiles need to go to the operator, and a person is usually seen
 in several frames. Per-tile recall is a lower bound for per-flight recall,
 which has not been measured.
 
+### v3 (2026-11-01): 7 more hours from v2
+
+v2 continued for 7 hours (`VOX_WARM_START`) plus 40 minutes of QAT. On the
+same test set the int8 QAT file now finds **83.9%** of people at threshold
+0.2 (v2: 82.5%). False alarms drop from 0.47 to **0.35 per tile**. Best F1
+rises from 0.558 to 0.569 (float: 0.560 to 0.593). Results:
+`artifacts_v3/evaluation.json`.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/voxocr-test-v1-v3-dark.svg">
+  <img alt="Recall and precision at the best-F1 threshold on the HERIDAL test set for v1, v2 and v3" src="docs/voxocr-test-v1-v3-light.svg">
+</picture>
+
 ## Limitations
 
 - **One dataset:** HERIDAL is summer, daytime, mostly Mediterranean terrain.
