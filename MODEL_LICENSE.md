@@ -23,3 +23,7 @@ Visual and Thermal Image Dataset for Wilderness Search and Rescue", IROS 2022.
 VoxHOD is built for **search and rescue**, to help find missing or injured
 people. It is not designed or licensed by the author for weapon targeting or
 for harming people.
+
+## Separate non-commercial branch
+
+**Not trained on the Ferhat Tatık footage.** That footage is licensed to this project for non-commercial use only, so models trained on it are published separately as [VoxHOD-NC](https://github.com/ErdemWilkinson/VoxHOD-NC) (CC BY-NC 4.0). VoxHOD stays CC BY 4.0.

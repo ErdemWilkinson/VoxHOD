@@ -175,6 +175,8 @@ Hugging Face now serves v3 and nano.
 
 ## License
 
+**Not trained on the Ferhat Tatık footage.** That footage is licensed to this project for non-commercial use only, so models trained on it are published separately as [VoxHOD-NC](https://github.com/ErdemWilkinson/VoxHOD-NC) (CC BY-NC 4.0). VoxHOD stays CC BY 4.0.
+
 Code: [MIT](LICENSE). Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
 [inviolus/VoxHOD](https://huggingface.co/inviolus/VoxHOD).
