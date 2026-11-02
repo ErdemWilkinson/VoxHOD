@@ -1,14 +1,15 @@
-# VoxHOD: tiny person detector for drone search and rescue
+# VoxHOD: tiny aerial person detector
 
 *Keywords: human detection, person detection, aerial, drone, search and rescue,
 TFLite, int8, TinyML, ESP32-S3, microcontroller.*
 
-**VoxHOD** is a tiny person detector for **drone search and rescue**,
+**VoxHOD** is a tiny, general-purpose person detector for **aerial images**,
 small enough for an ESP32-S3-class microcontroller: 136,547 parameters and a
 **197 KB full-int8 TensorFlow Lite** file, or 37,363 parameters and **75 KB**
 for the nano variant. It looks at a 160×160 RGB tile
 from a downward-looking camera and marks where people are, so a drone can
-flag places worth a closer look and report them to the rescue team.
+flag places worth a closer look. Search and rescue is the use it has been
+trained and measured for so far.
 
 It is the sibling of [InviolusOCR](https://github.com/ErdemWilkinson/InviolusOCR)
 (Turkish line OCR) and uses the same toolchain and methods. It does not read
@@ -178,5 +179,7 @@ Code: [MIT](LICENSE). Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attr
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
 [inviolus/VoxHOD](https://huggingface.co/inviolus/VoxHOD).
 
-VoxHOD is built for search and rescue, to help find people who need help.
-It is not intended for targeting or harming people.
+VoxHOD is a general-purpose aerial person detector. Search and rescue is the
+use it has been trained and measured for so far: helping find people who are
+lost or injured. Other settings are unmeasured. It is not intended for
+targeting or harming people.
