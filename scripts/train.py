@@ -1,4 +1,4 @@
-"""Train voxOCR: a tiny int8-friendly person detector for drone search and rescue.
+"""Train VoxHOD: a tiny int8-friendly person detector for drone search and rescue.
 
 CenterNet-style, anchor-free (PP-PicoDet is anchor-free too): the network
 predicts a 40x40 person-centre heatmap (stride 4 on a 160x160 RGB tile) plus
@@ -24,10 +24,11 @@ import numpy as np
 import tensorflow as tf
 
 ROOT = Path(__file__).resolve().parents[1]
-DATA = Path(os.environ.get("VOX_DATA", "D:/datasets/voxocr"))
+DATA = Path(os.environ.get("VOX_DATA", "D:/datasets/voxhod"))
 ARTIFACTS = Path(os.environ.get("VOX_ARTIFACTS", ROOT / "artifacts"))
 TILE, STRIDE = 160, 4
 GRID = TILE // STRIDE
+WIDTH = float(os.environ.get("VOX_WIDTH", "1"))  # filter multiplier for smaller models
 if os.environ.get("VOX_THREADS"):
     tf.config.threading.set_intra_op_parallelism_threads(int(os.environ["VOX_THREADS"]))
     tf.config.threading.set_inter_op_parallelism_threads(1)
@@ -51,18 +52,19 @@ def separable(x, filters, stride=1):
 
 
 def build_model() -> tf.keras.Model:
+    w = lambda filters: int(filters * WIDTH)
     image = tf.keras.Input((TILE, TILE, 3), name="image")
-    x = conv_bn(image, 16, 3, 2)                       # 80
-    x = separable(x, 32)
-    c4 = separable(separable(x, 48, 2), 48)            # 40
-    c8 = separable(separable(c4, 96, 2), 96)           # 20
-    c16 = separable(separable(c8, 160, 2), 160)        # 10
-    p = conv_bn(c16, 64, 1)
-    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c8, 64, 1)])
-    p = separable(p, 64)                               # 20
-    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c4, 64, 1)])
-    p = separable(p, 64)                               # 40
-    p = conv_bn(p, 64, 3)
+    x = conv_bn(image, w(16), 3, 2)                       # 80
+    x = separable(x, w(32))
+    c4 = separable(separable(x, w(48), 2), w(48))            # 40
+    c8 = separable(separable(c4, w(96), 2), w(96))           # 20
+    c16 = separable(separable(c8, w(160), 2), w(160))        # 10
+    p = conv_bn(c16, w(64), 1)
+    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c8, w(64), 1)])
+    p = separable(p, w(64))                               # 20
+    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c4, w(64), 1)])
+    p = separable(p, w(64))                               # 40
+    p = conv_bn(p, w(64), 3)
     heat = tf.keras.layers.Conv2D(1, 1, activation="sigmoid", name="heat",
                                   bias_initializer=tf.keras.initializers.Constant(-2.19))(p)
     size = tf.keras.layers.Conv2D(2, 1, name="size")(p)
@@ -199,12 +201,12 @@ def main() -> None:
     train, val = dataset(train_images, train_targets, True), dataset(val_images, val_targets, False)
 
     model = build_model()
-    if os.environ.get("VOX_WARM_START"):  # continue from an earlier voxocr.keras
+    if os.environ.get("VOX_WARM_START"):  # continue from an earlier voxhod.keras
         model.set_weights(tf.keras.models.load_model(os.environ["VOX_WARM_START"], compile=False).get_weights())
         print(f"Warm start from {os.environ['VOX_WARM_START']}", flush=True)
-    print(f"voxOCR parameters: {model.count_params():,}", flush=True)
+    print(f"VoxHOD parameters: {model.count_params():,}", flush=True)
     history = fit(model, train, val, 2e-3, float(os.environ.get("VOX_MAX_MINUTES", 60)))
-    model.save(ARTIFACTS / "voxocr.keras")
+    model.save(ARTIFACTS / "voxhod.keras")
     (ARTIFACTS / "history.json").write_text(json.dumps({k: [float(v) for v in vs] for k, vs in history.items()}))
     calibration = np.random.default_rng(7).choice(len(train_images), min(300, len(train_images)), replace=False)
     np.save(ARTIFACTS / "representative_images.npy", train_images[calibration])
@@ -217,7 +219,7 @@ def main() -> None:
             qat_history = fit(qat_model, train, val, 2e-4, qat_minutes)
             # A saved QAT model does not reload cleanly (quantize_layer
             # variables), so convert it while it is still in memory.
-            to_int8_tflite(qat_model, "voxocr_qat_int8.tflite")
+            to_int8_tflite(qat_model, "voxhod_qat_int8.tflite")
             (ARTIFACTS / "history_qat.json").write_text(json.dumps({k: [float(v) for v in vs] for k, vs in qat_history.items()}))
             print("QAT fine-tuning done.", flush=True)
         except Exception as error:  # QAT is an improvement, not a requirement: keep the float model

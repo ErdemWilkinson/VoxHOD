@@ -14,7 +14,7 @@ downscale) to imitate different heights:
 Validation and test images are tiled on a regular grid at 4x downscale so
 every annotated person is covered exactly once.
 
-    python scripts/prepare_heridal.py D:/datasets/heridal/heridal_keras_retinanet_voc D:/datasets/voxocr
+    python scripts/prepare_heridal.py D:/datasets/heridal/heridal_keras_retinanet_voc D:/datasets/voxhod
 """
 from __future__ import annotations
 

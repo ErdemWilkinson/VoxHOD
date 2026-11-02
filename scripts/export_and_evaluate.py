@@ -1,8 +1,8 @@
-"""Export voxOCR to full-int8 TFLite and score float and int8 models.
+"""Export VoxHOD to full-int8 TFLite and score float and int8 models.
 
 Two int8 files are scored when available:
-  voxocr_int8.tflite      post-training quantization of the float model (written here)
-  voxocr_qat_int8.tflite  the quantization-aware fine-tuned model (written by train.py)
+  voxhod_int8.tflite      post-training quantization of the float model (written here)
+  voxhod_qat_int8.tflite  the quantization-aware fine-tuned model (written by train.py)
 
 Scoring follows the search-and-rescue goal: recall (share of annotated people
 found) comes first. A prediction is a local maximum of the heatmap above a
@@ -15,6 +15,7 @@ F1 and the operating point with recall >= 0.90 if one exists.
 from __future__ import annotations
 
 import json
+import os
 import sys
 from pathlib import Path
 
@@ -83,11 +84,11 @@ def score(outputs: np.ndarray, boxes: np.ndarray, counts: np.ndarray) -> dict:
 
 def main() -> None:
     splits = sys.argv[1:] or ["val", "test"]
-    float_model = tf.keras.models.load_model(ARTIFACTS / "voxocr.keras", compile=False)
+    float_model = tf.keras.models.load_model(ARTIFACTS / "voxhod.keras", compile=False)
     variants = {"float": lambda images: run_float(float_model, images)}
-    ptq = to_int8_tflite(float_model, "voxocr_int8.tflite")
+    ptq = to_int8_tflite(float_model, "voxhod_int8.tflite")
     variants["int8_ptq"] = lambda images: run_int8(ptq, images)
-    qat = ARTIFACTS / "voxocr_qat_int8.tflite"  # written by train.py after QAT fine-tuning
+    qat = ARTIFACTS / "voxhod_qat_int8.tflite"  # written by train.py after QAT fine-tuning
     if qat.exists():
         variants["int8_qat"] = lambda images: run_int8(qat, images)
     results = {"params": float_model.count_params()}
@@ -97,7 +98,7 @@ def main() -> None:
             result = score(run(data["images"]), data["boxes"], data["counts"])
             results[f"{split}/{variant}"] = result
             print(split, variant, "best F1", result["best_f1"], "recall>=0.9", result["recall_90"], flush=True)
-    (ARTIFACTS / "evaluation.json").write_text(json.dumps(results, indent=2))
+    (ARTIFACTS / os.environ.get("VOX_EVAL_OUT", "evaluation.json")).write_text(json.dumps(results, indent=2))
 
 
 if __name__ == "__main__":

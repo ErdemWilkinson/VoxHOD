@@ -2,17 +2,21 @@
 
 The **code** in this repository is MIT licensed (see `LICENSE`).
 
-The **trained VoxHOD weights** (`voxocr.keras`, `voxocr_int8.tflite`,
-`voxocr_qat_int8.tflite`) are released under **CC BY 4.0**. They were trained
-only on:
+The **trained VoxHOD weights** (`voxhod.keras`, `voxhod_int8.tflite`,
+`voxhod_qat_int8.tflite`, and the `voxhod_nano` files) are released under
+**CC BY 4.0**. They were trained only on HERIDAL:
 
 | Dataset | Licence | Use |
 |---|---|---|
 | HERIDAL, Božić-Štulić et al., Zenodo record 5662351 | CC BY 3.0 | training, validation, test |
+| WiSARD sample, Broyles, Hayner, Leung | MIT wording on the dataset site | external test only, never trained on |
 
 HERIDAL attribution: D. Božić-Štulić, Ž. Marušić, S. Gotovac, "Deep Learning
 Approach in Aerial Imagery for Supporting Land Search and Rescue Missions",
 International Journal of Computer Vision, 2019.
+
+WiSARD attribution: D. Broyles, C. R. Hayner, K. Leung, "WiSARD: A Labeled
+Visual and Thermal Image Dataset for Wilderness Search and Rescue", IROS 2022.
 
 ## Intended use
 

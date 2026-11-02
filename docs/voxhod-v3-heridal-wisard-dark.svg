@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 860 360" width="860" height="360" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif">
+<rect x="0.5" y="0.5" width="859" height="359" rx="6" fill="#1a1a19" stroke="#2c2c2a"/>
+<rect x="20" y="15" width="12" height="12" rx="3" fill="#3987e5"/><text x="38" y="25" font-size="12" fill="#c3c2b7">HERIDAL test</text>
+<rect x="134" y="15" width="12" height="12" rx="3" fill="#d95926"/><text x="152" y="25" font-size="12" fill="#c3c2b7">WiSARD sample</text>
+<text x="20" y="60" font-size="14" font-weight="600" fill="#ffffff">VoxHOD v3 int8 QAT on data from another camera</text><text x="20" y="77" font-size="11.5" fill="#94928b">WiSARD: 6,336 tiles from one correlated clip, never trained on. Fixed thresholds.</text>
+<line x1="56" x2="840" y1="300.0" y2="300.0" stroke="#45453f"/><text x="48" y="304.0" font-size="11" text-anchor="end" fill="#94928b">0</text>
+<line x1="56" x2="840" y1="250.0" y2="250.0" stroke="#2c2c2a"/><text x="48" y="254.0" font-size="11" text-anchor="end" fill="#94928b">25</text>
+<line x1="56" x2="840" y1="200.0" y2="200.0" stroke="#2c2c2a"/><text x="48" y="204.0" font-size="11" text-anchor="end" fill="#94928b">50</text>
+<line x1="56" x2="840" y1="150.0" y2="150.0" stroke="#2c2c2a"/><text x="48" y="154.0" font-size="11" text-anchor="end" fill="#94928b">75</text>
+<line x1="56" x2="840" y1="100.0" y2="100.0" stroke="#2c2c2a"/><text x="48" y="104.0" font-size="11" text-anchor="end" fill="#94928b">100</text>
+<path d="M119.0,300 V136.2 Q119.0,132.2 123.0,132.2 H149.0 Q153.0,132.2 153.0,136.2 V300 Z" fill="#3987e5"><title>Recall at 0.2 · HERIDAL test: 83.9%</title></path><text x="136.0" y="127.2" font-size="10.5" text-anchor="middle" fill="#c3c2b7">83.9</text>
+<path d="M155.0,300 V181.4 Q155.0,177.4 159.0,177.4 H185.0 Q189.0,177.4 189.0,181.4 V300 Z" fill="#d95926"><title>Recall at 0.2 · WiSARD sample: 61.3%</title></path><text x="172.0" y="172.4" font-size="10.5" text-anchor="middle" fill="#c3c2b7">61.3</text>
+<text x="154.0" y="318" font-size="11.5" text-anchor="middle" fill="#c3c2b7">Recall at 0.2</text>
+<path d="M315.0,300 V263.2 Q315.0,259.2 319.0,259.2 H345.0 Q349.0,259.2 349.0,263.2 V300 Z" fill="#3987e5"><title>Precision at 0.2 · HERIDAL test: 20.4%</title></path><text x="332.0" y="254.2" font-size="10.5" text-anchor="middle" fill="#c3c2b7">20.4</text>
+<path d="M351.0,300 V265.8 Q351.0,261.8 355.0,261.8 H381.0 Q385.0,261.8 385.0,265.8 V300 Z" fill="#d95926"><title>Precision at 0.2 · WiSARD sample: 19.1%</title></path><text x="368.0" y="256.8" font-size="10.5" text-anchor="middle" fill="#c3c2b7">19.1</text>
+<text x="350.0" y="318" font-size="11.5" text-anchor="middle" fill="#c3c2b7">Precision at 0.2</text>
+<path d="M511.0,300 V150.8 Q511.0,146.8 515.0,146.8 H541.0 Q545.0,146.8 545.0,150.8 V300 Z" fill="#3987e5"><title>Recall at 0.3 · HERIDAL test: 76.6%</title></path><text x="528.0" y="141.8" font-size="10.5" text-anchor="middle" fill="#c3c2b7">76.6</text>
+<path d="M547.0,300 V198.8 Q547.0,194.8 551.0,194.8 H577.0 Q581.0,194.8 581.0,198.8 V300 Z" fill="#d95926"><title>Recall at 0.3 · WiSARD sample: 52.6%</title></path><text x="564.0" y="189.8" font-size="10.5" text-anchor="middle" fill="#c3c2b7">52.6</text>
+<text x="546.0" y="318" font-size="11.5" text-anchor="middle" fill="#c3c2b7">Recall at 0.3</text>
+<path d="M707.0,300 V239.0 Q707.0,235.0 711.0,235.0 H737.0 Q741.0,235.0 741.0,239.0 V300 Z" fill="#3987e5"><title>Precision at 0.3 · HERIDAL test: 32.5%</title></path><text x="724.0" y="230.0" font-size="10.5" text-anchor="middle" fill="#c3c2b7">32.5</text>
+<path d="M743.0,300 V240.0 Q743.0,236.0 747.0,236.0 H773.0 Q777.0,236.0 777.0,240.0 V300 Z" fill="#d95926"><title>Precision at 0.3 · WiSARD sample: 32.0%</title></path><text x="760.0" y="231.0" font-size="10.5" text-anchor="middle" fill="#c3c2b7">32.0</text>
+<text x="742.0" y="318" font-size="11.5" text-anchor="middle" fill="#c3c2b7">Precision at 0.3</text>
+</svg>
