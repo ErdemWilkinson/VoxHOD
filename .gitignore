@@ -9,3 +9,5 @@ artifacts*/*
 __pycache__/
 *.py[cod]
 .venv/
+artifacts_nc/
+artifacts_v3_dron/

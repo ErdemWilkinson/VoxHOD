@@ -10,6 +10,7 @@ Environment:
   VOX_DATA         folder with train.npz / val.npz from prepare_heridal.py
   VOX_ARTIFACTS    output folder (default ../artifacts)
   VOX_MAX_MINUTES  float training budget, cosine learning-rate decay over it
+  VOX_LR           float base learning rate (default 2e-3; use a lower one with VOX_WARM_START)
   VOX_QAT_MINUTES  quantization-aware fine-tuning budget after float training (0 = skip)
   VOX_THREADS      CPU threads
 """
@@ -205,7 +206,7 @@ def main() -> None:
         model.set_weights(tf.keras.models.load_model(os.environ["VOX_WARM_START"], compile=False).get_weights())
         print(f"Warm start from {os.environ['VOX_WARM_START']}", flush=True)
     print(f"VoxHOD parameters: {model.count_params():,}", flush=True)
-    history = fit(model, train, val, 2e-3, float(os.environ.get("VOX_MAX_MINUTES", 60)))
+    history = fit(model, train, val, float(os.environ.get("VOX_LR", "2e-3")), float(os.environ.get("VOX_MAX_MINUTES", 60)))
     model.save(ARTIFACTS / "voxhod.keras")
     (ARTIFACTS / "history.json").write_text(json.dumps({k: [float(v) for v in vs] for k, vs in history.items()}))
     calibration = np.random.default_rng(7).choice(len(train_images), min(300, len(train_images)), replace=False)
