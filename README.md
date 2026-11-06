@@ -156,6 +156,27 @@ Thresholds are fixed here rather than picked on the test set.
 Results: `artifacts_nano/evaluation.json`, `artifacts_v3/evaluation_wisard.json`.
 Hugging Face now serves v3 and nano.
 
+## On-device measurement (ESP32-P4)
+
+Measured on 2026-11-06 on one ESP32-P4 board (rev v1.3, 360 MHz, 32 MB flash, 32 MB PSRAM) with ESP-IDF 5.3.5 and `esp-tflite-micro` 1.4.2. Each row is the mean of 20 runs after 2 warm-up runs; the published files were measured byte for byte. One inference is one 160x160 RGB tile.
+
+| Model | File | Arena used | Latency, arena in internal SRAM | Latency, arena in PSRAM (200 MHz) |
+|---|---:|---:|---:|---:|
+| VoxHOD v3 | 197 KB | 332 KB | 321 ms | 347 ms |
+| VoxHOD nano | 75 KB | 218 KB | 151 ms | 159 ms |
+
+The weights stay in flash; the arena only holds the activations. Both models fit in internal SRAM.
+At 321 ms a tile, the P4 scans about 3 tiles a second.
+
+What this does and does not show:
+
+- Random int8 input: this is **speed and memory only**. The output was not compared with the PC
+  interpreter, so correctness on the device is unchecked.
+- Only the model inference is timed, not image decoding, resizing, box extraction.
+- It is an ESP32-P4, not an ESP32-S3. The numbers do not carry over to the S3, which has other cores.
+- Whether ESP-NN's accelerated kernels are active for the P4 was not checked, so the speed may improve.
+- One board. Source and raw output: [benchmarks/esp32-p4](https://github.com/ErdemWilkinson/InviolusOCR/tree/master/benchmarks/esp32-p4).
+
 ## Limitations
 
 - **One training dataset:** HERIDAL is summer, daytime, mostly Mediterranean
@@ -163,7 +184,7 @@ Hugging Face now serves v3 and nano.
   canopy, water, night and thermal are untested.
 - The 90% recall target is not reached on the test set (v3 88.7%, nano 89.5% at
   threshold 0.1, the lowest shown).
-- Not yet run on an ESP32-S3. Speed and memory on the device are unmeasured.
+- Speed and memory are measured on an ESP32-P4 (see above), not yet on an ESP32-S3.
 - Boxes are coarse (stride 4). The model is built to say *where to look*, not
   to measure people.
 
@@ -171,7 +192,7 @@ Hugging Face now serves v3 and nano.
 
 - More aerial person data with clear licences (e.g. SeaDronesSee for water,
   and the full WiSARD set for other terrain).
-- Run on an ESP32-S3 with TFLite Micro or ESP-DL and measure latency.
+- Measure on an ESP32-S3, and check the output against the PC interpreter on the device.
 
 ## License
 
