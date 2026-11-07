@@ -169,3 +169,98 @@ def hbar_panels(stem: Path, title: str, subtitle: str, panels: list[dict]) -> No
         return "".join(out)
 
     write(stem, width, height, body)
+
+
+def wrap(text: str, width: int) -> list[str]:
+    lines, line = [], ""
+    for word in text.split():
+        if line and len(line) + 1 + len(word) > width:
+            lines.append(line)
+            line = word
+        else:
+            line = f"{line} {word}".strip()
+    return lines + ([line] if line else [])
+
+
+def channel_bars(stem: Path, title: str, subtitle: str, scores: list[float], keep: int, maximum: float = 7.0) -> None:
+    """Sorted importance scores; the first `keep` bars are kept (orange), the rest are cut (grey)."""
+    width, height = 860, 330
+    left, right, top, bottom = 50, 20, 110, 290
+    bw = (width - left - right) / len(scores)
+
+    def sy(v: float) -> float:
+        return bottom - (bottom - top) * v / maximum
+
+    def body(t: dict) -> str:
+        out = [header(t, title, subtitle, [(f"kept ({keep})", 1)])]
+        cx = 20 + 34 + 6.6 * len(f"kept ({keep})")
+        out.append(f'<rect x="{cx:.0f}" y="62" width="12" height="12" rx="3" fill="{t["axis"]}"/>'
+                   f'<text x="{cx + 18:.0f}" y="72" font-size="12" fill="{t["text"]}">cut ({len(scores) - keep})</text>')
+        for v in range(0, int(maximum) + 1, 2):
+            out.append(f'<line x1="{left}" x2="{width - right}" y1="{sy(v):.1f}" y2="{sy(v):.1f}" stroke="{t["grid" if v else "axis"]}"/>'
+                       f'<text x="{left - 8}" y="{sy(v) + 4:.1f}" font-size="11" text-anchor="end" fill="{t["muted"]}">{v}</text>')
+        for i, s in enumerate(scores):
+            x = left + i * bw
+            color = t["series"][1] if i < keep else t["axis"]
+            out.append(f'<path d="{bar_up(x + 0.6, sy(s), max(bw - 1.2, 1), bottom - sy(s))}" fill="{color}">'
+                       f'<title>channel {i + 1}: score {s:.2f}, {"kept" if i < keep else "cut"}</title></path>')
+        xc = left + keep * bw
+        out.append(f'<line x1="{xc:.1f}" x2="{xc:.1f}" y1="{top - 14}" y2="{bottom}" stroke="{t["text"]}" stroke-dasharray="3 3"/>'
+                   f'<text x="{xc - 6:.1f}" y="{top - 4}" font-size="12" font-weight="600" text-anchor="end" fill="{t["title"]}">kept {keep}</text>'
+                   f'<text x="{xc + 6:.1f}" y="{top - 4}" font-size="12" fill="{t["text"]}">cut {len(scores) - keep}</text>'
+                   f'<text x="{left}" y="{bottom + 18}" font-size="11" fill="{t["muted"]}">most important</text>'
+                   f'<text x="{width - right}" y="{bottom + 18}" font-size="11" text-anchor="end" fill="{t["muted"]}">least important</text>')
+        return "".join(out)
+
+    write(stem, width, height, body)
+
+
+def roadmap(stem: Path, title: str, subtitle: str, columns: list[str], lanes: list[tuple[str, list[list[tuple[str, str, bool]]]]]) -> None:
+    """lanes: (lane name, [cards per column]); card: (title, gate text, highlight)."""
+    width, x0, lane_w, gap, pad = 860, 20, 92, 10, 10
+    col_w = (width - x0 * 2 - lane_w - gap * len(columns)) / len(columns)
+    chars = int((col_w - 2 * pad) / 6.3)
+    line_h, title_h = 15, 17
+
+    def card_h(card: tuple[str, str, bool]) -> float:
+        return pad * 2 + title_h * len(wrap(card[0], chars - 2)) + 6 + line_h * len(wrap(card[1], chars))
+
+    lane_heights = [max([sum(card_h(c) + 8 for c in col) for col in cols] + [40]) for _, cols in lanes]
+    top = 112
+    height = int(top + sum(lane_heights) + 12 * len(lanes) + 16)
+
+    def body(t: dict) -> str:
+        out = [header(t, title, subtitle)]
+        for i, c in enumerate(columns):
+            x = x0 + lane_w + gap + i * (col_w + gap)
+            out.append(f'<text x="{x:.0f}" y="{top - 12}" font-size="11.5" font-weight="600" letter-spacing="0.6" fill="{t["muted"]}">{esc(c.upper())}</text>')
+        y = top
+        for (lane, cols), lh in zip(lanes, lane_heights):
+            out.append(f'<line x1="{x0}" x2="{width - x0}" y1="{y - 4:.0f}" y2="{y - 4:.0f}" stroke="{t["grid"]}"/>'
+                       f'<text x="{x0}" y="{y + 18:.0f}" font-size="15" font-weight="700" fill="{t["title"]}">{esc(lane)}</text>')
+            for i, col in enumerate(cols):
+                x = x0 + lane_w + gap + i * (col_w + gap)
+                cy = y + 4
+                for card in col:
+                    h = card_h(card)
+                    hl = card[2]
+                    out.append(f'<rect x="{x:.0f}" y="{cy:.0f}" width="{col_w:.0f}" height="{h:.0f}" rx="7" fill="{t["surface"]}" '
+                               f'stroke="{t["series"][1] if hl else t["border"]}" stroke-width="{1.6 if hl else 1}"/>')
+                    if hl:
+                        out.append(f'<rect x="{x:.0f}" y="{cy:.0f}" width="4" height="{h:.0f}" rx="2" fill="{t["series"][1]}"/>')
+                    ty = cy + pad + 12
+                    for ln in wrap(card[0], chars - 2):
+                        out.append(f'<text x="{x + pad + 2:.0f}" y="{ty:.0f}" font-size="12.5" font-weight="600" fill="{t["title"]}">{esc(ln)}</text>')
+                        ty += title_h
+                    gy = ty - 6
+                    gl = wrap(card[1], chars)
+                    out.append(f'<rect x="{x + pad - 2:.0f}" y="{gy:.0f}" width="{col_w - 2 * pad + 4:.0f}" height="{line_h * len(gl) + 8}" rx="4" fill="{t["zone"]}"/>')
+                    ty = gy + 15
+                    for ln in gl:
+                        out.append(f'<text x="{x + pad + 2:.0f}" y="{ty:.0f}" font-size="11.5" fill="{t["text"]}">{esc(ln)}</text>')
+                        ty += line_h
+                    cy += h + 8
+            y += lh + 12
+        return "".join(out)
+
+    write(stem, width, height, body)

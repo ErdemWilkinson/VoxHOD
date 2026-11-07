@@ -146,6 +146,11 @@ adds drone footage by Ferhat Tatık (v2: HERIDAL 85.2% / 19.4%, WiSARD 70.5% /
 
 ## Roadmap
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/roadmap-dark.svg">
+  <img alt="Roadmap for InviolusOCR, VoxHOD and the ASR baseline: next steps, this week and later, each with its gate" src="docs/roadmap-light.svg">
+</picture>
+
 Rule for every step: **the device model does not grow** beyond 197 KB (v3)
 and 75 KB (nano). Larger models are only allowed as teachers. A step ships
 only if it passes its gate.
