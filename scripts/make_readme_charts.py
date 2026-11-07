@@ -13,7 +13,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from svgkit import grouped_bars, hbar_panels  # noqa: E402
+from svgkit import grouped_bars, hbar_panels, roadmap  # noqa: E402
 
 DOCS = Path(__file__).resolve().parents[1] / "docs"
 
@@ -32,6 +32,13 @@ def main() -> None:
                   "rows": [("training", 28.5, "29%"), ("validation", 96, "96%"), ("test", 91, "91%")]},
                  {"title": "People found, by size", "max": 100, "slot": 0,
                   "rows": [("8-16 px (171)", 77.2, "77.2%"), ("16-32 px (198)", 89.9, "89.9%")]}])
+    roadmap(DOCS / "roadmap-voxhod", "VoxHOD roadmap",
+            "Rule: the device model never grows; larger models are only teachers. A step ships only if it passes its gate.",
+            ["Next", "This week", "Later"],
+            [("VoxHOD", [[("Train with many more empty and hard-negative tiles", "Gate: precision > 20.4% at recall ≥ 83% and WiSARD recall ≥ 61.3%", True)],
+                         [("Find small people more often", "Gate: ≥ 85% of 8-16 px people, same file size", False)],
+                         [("More varied aerial data (full WiSARD, SeaDronesSee)", "Gate: WiSARD recall > 61.3% without losing HERIDAL", False),
+                          ("Check device output against the PC, measure on an ESP32-S3", "Gate: same detections on device and PC", False)]])])
     print("charts written to", DOCS)
 
 

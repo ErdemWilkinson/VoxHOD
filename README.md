@@ -147,8 +147,8 @@ adds drone footage by Ferhat Tatık (v2: HERIDAL 85.2% / 19.4%, WiSARD 70.5% /
 ## Roadmap
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/roadmap-dark.svg">
-  <img alt="Roadmap for InviolusOCR, VoxHOD and the ASR baseline: next steps, this week and later, each with its gate" src="docs/roadmap-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/roadmap-voxhod-dark.svg">
+  <img alt="VoxHOD roadmap: next steps, this week and later, each with its gate" src="docs/roadmap-voxhod-light.svg">
 </picture>
 
 Rule for every step: **the device model does not grow** beyond 197 KB (v3)
@@ -157,7 +157,7 @@ only if it passes its gate.
 
 | Step | Why | Gate to ship | Status |
 |---|---|---|---|
-| Train with many more empty and hard-negative tiles | 89% of false alarms are on empty tiles; training has 29% empty tiles | HERIDAL precision above 20.4% at recall ≥ 83% (threshold 0.2) | next |
+| Train with many more empty and hard-negative tiles | 89% of false alarms are on empty tiles; training has 29% empty tiles | HERIDAL precision above 20.4% at recall ≥ 83% (threshold 0.2), and WiSARD recall ≥ 61.3% | next |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
 | More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Check the device output against the PC interpreter, measure on an ESP32-S3 | Only speed and memory are measured so far, on a P4 | Same detections on device and PC | open |
