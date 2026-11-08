@@ -224,6 +224,35 @@ What this does and does not show:
 - Whether ESP-NN's accelerated kernels are active for the P4 was not checked, so the speed may improve.
 - One board. Source and raw output: [benchmarks/esp32-p4](https://github.com/ErdemWilkinson/InviolusOCR/tree/master/benchmarks/esp32-p4).
 
+## Memory budget on ESP32 chips
+
+The arena (the RAM a model needs while it runs) was measured on the ESP32-P4 and is
+almost the same on other ESP32 chips. Free RAM on the P4 was measured in the benchmark
+firmware; free RAM on the S3 and C6 are **estimates** for typical ESP-IDF projects, and the
+real value depends on the firmware. The C6 has no PSRAM, so everything must fit in its
+internal SRAM. Not included: camera frame buffers and the application's own memory.
+
+Arena as a share of the chip's internal SRAM:
+
+| Model | Arena | ESP32-S3 (512 KB) | ESP32-C6 (512 KB) | ESP32-P4 (768 KB) |
+|---|---:|---:|---:|---:|
+| v3 | 332 KB | 65% | 65% | 43% |
+| nano | 218 KB | 43% | 43% | 28% |
+
+Arena as a share of the RAM that is actually free (✅ fits comfortably, ⚠️ fits with little
+room left, ❌ does not fit):
+
+| Model | P4, 569 KB free (measured) | S3, Wi-Fi off, ~350 KB (est.) | S3, Wi-Fi on, ~250 KB (est.) | C6, Wi-Fi off, ~400 KB (est.) | C6, Wi-Fi + BLE on, ~200 KB (est.) |
+|---|---:|---:|---:|---:|---:|
+| v3 | 58% ✅ | 95% ❌* | 133% ❌* | 83% ⚠️ | 166% ❌ |
+| nano | 38% ✅ | 62% ✅ | 87% ⚠️ | 55% ✅ | 109% ❌ |
+
+\* With PSRAM on the S3 the arena can move there and the model runs, more slowly.
+
+Flash is not the limit (v3 takes 5% of a 4 MB flash). On an ESP32-S3 (240 MHz) the latency
+is estimated at roughly 1.2 to 2.5 times the P4's (v3 about 0.4 to 0.8 s, nano about 0.2 to
+0.4 s per tile), not measured. In short: on an ESP32-S3 without PSRAM, use nano.
+
 ## Limitations
 
 - **One training dataset:** HERIDAL is summer, daytime, mostly Mediterranean
