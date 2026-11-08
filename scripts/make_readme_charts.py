@@ -32,10 +32,15 @@ def main() -> None:
                   "rows": [("training", 28.5, "29%"), ("validation", 96, "96%"), ("test", 91, "91%")]},
                  {"title": "People found, by size", "max": 100, "slot": 0,
                   "rows": [("8-16 px (171)", 77.2, "77.2%"), ("16-32 px (198)", 89.9, "89.9%")]}])
+    grouped_bars(DOCS / "voxhod-hard-negatives", "Hard negatives against a same-budget control (int8 QAT files, threshold 0.2)",
+                 "HN: v3 + 1 GPU hour on tiles with 58% empty and hard-negative tiles. Control: v3 + 1 GPU hour on the old tiles (29% empty).",
+                 ["HERIDAL recall", "HERIDAL precision", "WiSARD recall", "WiSARD precision"],
+                 [("v3 · published", 0, [83.9, 20.4, 61.3, 19.1]), ("HN · hard negatives", 1, [79.3, 31.8, 54.8, 30.3]),
+                  ("control · old tiles", 4, [81.7, 22.1, 58.8, 21.0])])
     roadmap(DOCS / "roadmap-voxhod", "VoxHOD roadmap",
             "Rule: the device model never grows; larger models are only teachers. A step ships only if it passes its gate.",
             ["Next", "This week", "Later"],
-            [("VoxHOD", [[("Train with many more empty and hard-negative tiles", "Gate: precision > 20.4% at recall ≥ 83% and WiSARD recall ≥ 61.3%", True)],
+            [("VoxHOD", [[("Hard negatives, tuned for recall", "Tried 2026-11-08: false alarms halved, but recall fell to 79%; gate not passed. Next: fewer hard negatives or a recall-weighted loss", True)],
                          [("Find small people more often", "Gate: ≥ 85% of 8-16 px people, same file size", False)],
                          [("More varied aerial data (full WiSARD, SeaDronesSee)", "Gate: WiSARD recall > 61.3% without losing HERIDAL", False),
                           ("Check device output against the PC, measure on an ESP32-S3", "Gate: same detections on device and PC", False)]])])

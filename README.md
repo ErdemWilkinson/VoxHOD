@@ -124,6 +124,42 @@ training involved):
 - **Small people are found less often:** 77% of people 8 to 16 px tall,
   against 90% of people 16 to 32 px tall.
 
+### Trying the fix: hard negatives (2026-11-08)
+
+`scripts/mine_negatives.py` scored 40 empty crops of every training photo with
+v3 and added the 4 it was most wrongly sure about (hard negatives, median score
+0.37, above the 0.2 threshold) plus 3 random empty ones: 9,737 tiles, so 58% of
+training tiles are now empty instead of 29%. **HN** continued v3 for one GPU
+hour on these tiles. The **control** continued v3 for the same hour on the old
+tiles, so the comparison isolates the data. Both got 20 minutes of
+quantization-aware training afterwards (HN's ran on the CPU because it did not
+fit the 6 GB GPU, so it had fewer steps).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/voxhod-hard-negatives-dark.svg">
+  <img alt="Recall and precision of v3, the hard-negative model and the control at threshold 0.2 on HERIDAL and WiSARD" src="docs/voxhod-hard-negatives-light.svg">
+</picture>
+
+| int8 QAT file, threshold 0.2 | HERIDAL recall | Precision | False alarms per tile | Best F1 | WiSARD recall | Precision | Best F1 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v3 (published) | **83.9%** | 20.4% | 0.35 | 0.569 | **61.3%** | 19.1% | 0.449 |
+| control (old tiles) | 81.7% | 22.1% | 0.30 | 0.566 | 58.8% | 21.0% | 0.453 |
+| HN (hard negatives) | 79.3% | **31.8%** | **0.18** | **0.609** | 54.8% | **30.3%** | **0.475** |
+
+- **The diagnosis was right:** the hard negatives halved the false alarms and
+  raised the best F1 on both sets. The control, with the same extra training
+  on the old tiles, gained nothing.
+- **But the model became more cautious:** it finds 4.6 points fewer people at
+  threshold 0.2, and at recall ≥ 83% its precision is no better than v3's.
+  The gate (more precision without losing recall) is not passed, so v3 stays
+  the published model. For search and rescue, a missed person costs more than
+  a false alarm.
+- Next: fewer hard negatives per photo, or a loss that weighs missed people
+  more, to keep recall while cutting false alarms.
+
+Results: `ocr/artifacts/night-2026-11-08/evaluation_vox_*.json` in the
+InviolusOCR repository, where the overnight runs are logged.
+
 ### Version history
 
 All rows: HERIDAL test set, int8 file, threshold 0.2.
@@ -135,6 +171,8 @@ All rows: HERIDAL test set, int8 file, threshold 0.2.
 | **v3** | 2026-11-01 | v2 + 7 hours | 83.9% / 20.4% | 61.3% / 19.1% | **on Hugging Face** |
 | **nano** | 2026-11-02 | half width, from scratch (PTQ file) | 81.2% / 12.7% | 62.2% / 13.4% | **on Hugging Face** |
 | v4 | 2026-11-06 | v3 + about 2 hours | 83.6% / 21.7% | 58.6% / 19.5% | not published: lower WiSARD recall |
+| control | 2026-11-08 | v3 + 1 GPU hour, old tiles | 81.7% / 22.1% | 58.8% / 21.0% | control only |
+| HN | 2026-11-08 | v3 + 1 GPU hour, 58% empty and hard-negative tiles | 79.3% / 31.8% | 54.8% / 30.3% | not published: lower recall |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
@@ -157,7 +195,7 @@ only if it passes its gate.
 
 | Step | Why | Gate to ship | Status |
 |---|---|---|---|
-| Train with many more empty and hard-negative tiles | 89% of false alarms are on empty tiles; training has 29% empty tiles | HERIDAL precision above 20.4% at recall ≥ 83% (threshold 0.2), and WiSARD recall ≥ 61.3% | next |
+| Train with many more empty and hard-negative tiles | 89% of false alarms are on empty tiles; training has 29% empty tiles | HERIDAL precision above 20.4% at recall ≥ 83% (threshold 0.2), and WiSARD recall ≥ 61.3% | **tried 2026-11-08, not passed:** false alarms halved, recall 79.3%. Next: fewer hard negatives or a recall-weighted loss |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
 | More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Check the device output against the PC interpreter, measure on an ESP32-S3 | Only speed and memory are measured so far, on a P4 | Same detections on device and PC | open |

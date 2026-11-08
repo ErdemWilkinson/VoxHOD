@@ -2,7 +2,7 @@
 
 Every chart is written twice, <stem>-light.svg and <stem>-dark.svg, so a README can
 switch with <picture>. Categorical colours are the validated slots 1-4 (blue, orange,
-aqua, yellow); values are printed in text ink next to each mark because aqua and
+aqua, yellow) plus a neutral grey (slot 4) for control runs; values are printed in text ink next to each mark because aqua and
 yellow are below 3:1 contrast on the light surface. Each mark has a <title>, so
 hovering the image in a browser shows the exact value.
 """
@@ -14,10 +14,10 @@ from typing import Callable
 THEMES = {
     "light": {"surface": "#fcfcfb", "border": "#e1e0d9", "title": "#0b0b0b", "text": "#52514e",
               "muted": "#7d7b75", "grid": "#e1e0d9", "axis": "#c3c2b7", "zone": "#f1f0ec",
-              "series": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100"], "on_series": "#ffffff"},
+              "series": ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#a8a69f"], "on_series": "#ffffff"},
     "dark": {"surface": "#1a1a19", "border": "#2c2c2a", "title": "#ffffff", "text": "#c3c2b7",
              "muted": "#94928b", "grid": "#2c2c2a", "axis": "#45453f", "zone": "#232321",
-             "series": ["#3987e5", "#d95926", "#199e70", "#c98500"], "on_series": "#ffffff"},
+             "series": ["#3987e5", "#d95926", "#199e70", "#c98500", "#6b6a64"], "on_series": "#ffffff"},
 }
 FONT = "-apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif"
 
