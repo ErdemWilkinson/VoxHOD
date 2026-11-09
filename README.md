@@ -242,6 +242,40 @@ data order, augmentation and (from scratch) starting weights.
   (pruned run 3) finds 78.5% of people on HERIDAL against nano's 83.1%, and the
   QAT files are 78 KB against nano's 75 KB. Nano stays published.
 
+**Looking for a better nano (2026-11-09 afternoon).** The 30-minute small models
+above raise fewer false alarms than nano, so a follow-up tried to turn that into
+a new nano: quantization-aware training of nano itself (NQ), nano trained 30
+more minutes (NC30), a fourth from-scratch run (S05d), and the PTQ (75 KB)
+versions of all runs. The candidate was to be **picked on validation**
+(highest precision at the matched recall) and then compared with nano on the
+test sets, here with nano as the reference of the bootstrap.
+
+| int8 file | Size | Validation precision | HERIDAL recall (vs nano, 95%) | False alarms per tile | WiSARD recall (vs nano, 95%) | NOMAD false alarms per tile |
+|---|---:|---:|---:|---:|---:|---:|
+| nano (published, PTQ) | 75 KB | 5.4% | 83.1% | 0.77 | 64.8% | 1.71 |
+| NQ: nano + 10 min QAT | 78 KB | 7.5% | 81.7% (−3.6 to +0.8) | 0.53 | 62.3% (−3.9 to −1.1) | 1.35 |
+| NC30: nano + 30 min + QAT | 78 KB | 6.3% | 82.3% (−3.0 to +1.4) | 0.62 | 62.9% (−3.2 to −0.6) | 1.48 |
+| NC30, PTQ | 75 KB | 5.5% | 81.7% (−3.9 to +1.1) | 0.72 | 67.0% (+0.8 to +3.5) | 1.66 |
+| **picked on validation:** pruned run 3, PTQ | 75 KB | 15.0% | 76.9% (−9.2 to −3.2) | 0.24 | 59.2% (−7.6 to −3.6) | 1.24 |
+| from scratch, run 4 | 78 KB | 3.7% | 87.4% (+0.8 to +7.4) | 1.29 | 70.4% (+3.3 to +7.8) | 2.29 |
+| from scratch, run 1 (best-looking on test) | 78 KB | 6.9% | 83.3% (−3.1 to +3.6) | 0.61 | 69.0% (+2.1 to +6.2) | 1.63 |
+
+- **Nothing passed; nano stays.** The validation pick gives up 6 points of
+  recall. Every candidate with fewer false alarms also finds fewer people
+  somewhere, and the one that finds more people (run 4) raises 1.7 times the
+  false alarms: they slide along the same trade-off.
+- **Run 1 looks better than nano on every set, but it was spotted by looking at
+  the test results** among 18 files, and its file is 3 KB larger. Choosing it
+  would be choosing on the test set, so it is not published.
+- **Validation is too small to set the threshold.** All models are matched to
+  the same recall on validation (317 people), yet on the test set their recall
+  spreads from 77% to 87%. A larger validation split is now the first thing to
+  fix before any further comparison.
+- **The test set is also small for this gate.** With 372 people the 95%
+  interval of a recall difference is about ±3 points, so "lower end no worse
+  than −1.5" only lets a clearly better model through. The gate was not
+  loosened after seeing the results.
+
 Results: `ocr/artifacts/night-2026-11-08/` and `night-2026-11-09/` in the
 InviolusOCR repository, where the overnight runs are logged.
 
@@ -263,6 +297,7 @@ are compared at matched operating points instead; see
 | V30, PW15 | 2026-11-09 | v3 + 30 min; PW15 weighs missed people 1.5× | see Experiments | see Experiments | not published: lower recall |
 | P07, S07 | 2026-11-09 | width 0.7 (116 KB): pruned from v3, and from scratch | see Experiments | see Experiments | not published: lower HERIDAL recall |
 | P05, S05 | 2026-11-09 | width 0.5 (nano size): pruned from v3, and from scratch, 3 runs each | see Experiments | see Experiments | not published: no run beat nano at the same recall |
+| NQ, NC30, S05d | 2026-11-09 | nano + QAT; nano + 30 min; a 4th from-scratch run | see Experiments | see Experiments | not published: picked on validation, it lost recall |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
@@ -291,6 +326,7 @@ Every gate is checked at matched operating points (threshold chosen on validatio
 | Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. Next: a larger teacher model (distillation), and more varied empty terrain with clear licences |
 | More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD; false alarms quadruple on NOMAD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
+| A larger validation split | 317 validation people cannot place models at the same operating point: matched there, their test recall spreads from 77% to 87% | Thresholds chosen on validation land within ±1 point of the target recall on test | **next** |
 | Smaller files by pruning v3 (network slimming) | A 116 KB file could replace v3 where RAM is short | Same gates as v3 or nano, over 3 runs | **tried 2026-11-09:** at width 0.5 no better than from scratch over 3 runs; one 0.7 run matched v3's precision at 80% recall but lost recall at the matched point. Next: repeat 0.7 |
 | Check the device output against the PC, measure on an ESP32-S3 | The output on the device was unchecked | Same people found on device and PC | **P4 done 2026-11-09:** same recall on 163 tiles; ESP32-S3 open |
 
