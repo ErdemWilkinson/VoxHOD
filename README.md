@@ -15,9 +15,10 @@ It is the sibling of [InviolusOCR](https://github.com/ErdemWilkinson/InviolusOCR
 (Turkish line OCR) and uses the same toolchain and methods. It does not read
 text. Text and people are kept in separate models so that each stays small.
 
-**Status:** measured on the HERIDAL test set and, as a first external check,
-on one WiSARD clip. Speed and memory are measured on an ESP32-P4 board. Not
-yet run in flight. Published: v3 (197 KB) and nano (75 KB) on
+**Status:** measured on the HERIDAL test set and, as external checks, on one
+WiSARD clip and on 4,000 empty NOMAD tiles from another camera. Speed, memory
+and the output on real tiles are checked on an ESP32-P4 board. Not yet run in
+flight. Published: v3 (197 KB) and nano (75 KB) on
 [Hugging Face](https://huggingface.co/inviolus/VoxHOD). See
 [Results](#results), [Version history](#version-history) and
 [Roadmap](#roadmap).
@@ -62,6 +63,12 @@ yet run in flight. Published: v3 (197 KB) and nano (75 KB) on
 python scripts/prepare_heridal.py <heridal_voc_folder> D:/datasets/voxhod
 VOX_DATA=D:/datasets/voxhod VOX_MAX_MINUTES=150 VOX_QAT_MINUTES=40 python scripts/train.py
 VOX_DATA=D:/datasets/voxhod python scripts/export_and_evaluate.py val test
+
+# compare int8 files at matched operating points (threshold chosen on val; first model is the reference)
+VOX_SPLITS=val,test,wisard,nomad_tn python scripts/threshold_sweep.py sweep/ v3=v3.tflite other=other.tflite
+# prune v3 to 70% width, then continue training it from the pruned weights
+VOX_WIDTH=0.7 python scripts/prune.py artifacts_v3/voxhod.keras pruned_0.7.h5
+VOX_WIDTH=0.7 VOX_WARM_START=pruned_0.7.h5 VOX_LR=1e-3 VOX_MAX_MINUTES=30 VOX_QAT_MINUTES=10 python scripts/train.py
 ```
 
 ## Results
@@ -105,6 +112,33 @@ Thresholds are fixed here rather than picked on the test set.
 - **int8 costs nothing measurable.** The QAT int8 file is within about half a
   point of the float model.
 
+### False alarms on unseen terrain (NOMAD)
+
+[NOMAD](https://github.com/ArtRuss/NOMAD) (CC BY 4.0) publishes 500 frames with
+nobody in them, 100 at each flight distance from 10 to 90 m, from a camera and
+terrain VoxHOD never saw. `scripts/prepare_nomad_tn.py` cuts 8 random 640 px crops
+from each frame and resizes them to 160 like the HERIDAL tiles: 4,000 empty
+tiles, so every detection is a false alarm. Test only, never trained on.
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/voxhod-nomad-dark.svg">
+  <img alt="False alarms per empty tile at threshold 0.2: HERIDAL test against NOMAD at 10 to 90 m, for v3 and nano" src="docs/voxhod-nomad-light.svg">
+</picture>
+
+| int8 file, threshold 0.2 | HERIDAL empty tiles | NOMAD, all | 10 m | 30 m | 50 m | 70 m | 90 m |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v3 | 0.34 | **1.29** | 1.10 | 1.11 | 1.39 | 1.35 | 1.49 |
+| nano | 0.60 | **1.43** | 1.34 | 1.25 | 1.47 | 1.54 | 1.56 |
+
+False alarms per empty tile.
+
+- **On unseen terrain v3 raises almost four times as many false alarms** as on
+  empty HERIDAL tiles (1.29 against 0.34 per tile), and more from higher up.
+- They cluster: 38% of NOMAD tiles get at least one, with about 3.4 on each of
+  those. At threshold 0.3 v3 drops to 0.74 per tile.
+- This is the clearest sign so far that the model needs more varied empty
+  terrain, not only more people.
+
 ### Where the false alarms come from
 
 An analysis of v3 on the HERIDAL test set at threshold 0.2 (2026-11-07, no
@@ -124,45 +158,98 @@ training involved):
 - **Small people are found less often:** 77% of people 8 to 16 px tall,
   against 90% of people 16 to 32 px tall.
 
-### Trying the fix: hard negatives (2026-11-08)
+### Experiments: fewer false alarms without losing people (2026-11-08 and 09)
 
-`scripts/mine_negatives.py` scored 40 empty crops of every training photo with
-v3 and added the 4 it was most wrongly sure about (hard negatives, median score
-0.37, above the 0.2 threshold) plus 3 random empty ones: 9,737 tiles, so 58% of
-training tiles are now empty instead of 29%. **HN** continued v3 for one GPU
-hour on these tiles. The **control** continued v3 for the same hour on the old
-tiles, so the comparison isolates the data. Both got 20 minutes of
-quantization-aware training afterwards (HN's ran on the CPU because it did not
-fit the 6 GB GPU, so it had fewer steps).
+**How models are compared.** A fixed threshold is unfair between models whose
+scores are calibrated differently: a model that has seen many empty tiles gives
+lower scores everywhere, so at 0.2 it looks more precise and less sensitive at
+the same time. `scripts/threshold_sweep.py` therefore picks each model's
+threshold on the **validation** set so that it finds as many people there as v3
+does at 0.2 (86.8%), and only then scores it on the test set, WiSARD and NOMAD.
+A paired bootstrap over tiles gives the 95% interval of each difference to v3.
+To ship, a model must keep test recall (lower end of the interval no worse than
+−1.5 points), not lose WiSARD recall, and raise fewer false alarms, also on
+NOMAD, without a bigger file.
+
+The runs in this table continue from v3 for the stated time on the laptop GPU,
+then get 10 to 20 minutes of quantization-aware training. Each change has a
+control that got the same extra training on the unchanged recipe.
 
 <picture>
-  <source media="(prefers-color-scheme: dark)" srcset="docs/voxhod-hard-negatives-dark.svg">
-  <img alt="Recall and precision of v3, the hard-negative model and the control at threshold 0.2 on HERIDAL and WiSARD" src="docs/voxhod-hard-negatives-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/voxhod-experiments-dark.svg">
+  <img alt="Recall and precision at matched operating points of v3, hard negatives, positive weight and their controls" src="docs/voxhod-experiments-light.svg">
 </picture>
 
-| int8 QAT file, threshold 0.2 | HERIDAL recall | Precision | False alarms per tile | Best F1 | WiSARD recall | Precision | Best F1 |
+| int8 QAT file, 197 KB | Threshold | HERIDAL recall (vs v3, 95%) | Precision | False alarms per tile | WiSARD recall (vs v3, 95%) | Precision | NOMAD false alarms per tile |
 |---|---:|---:|---:|---:|---:|---:|---:|
-| v3 (published) | **83.9%** | 20.4% | 0.35 | 0.569 | **61.3%** | 19.1% | 0.449 |
-| control (old tiles) | 81.7% | 22.1% | 0.30 | 0.566 | 58.8% | 21.0% | 0.453 |
-| HN (hard negatives) | 79.3% | **31.8%** | **0.18** | **0.609** | 54.8% | **30.3%** | **0.475** |
+| **v3 (published)** | 0.20 | **83.9%** | 20.4% | 0.35 | **61.3%** | 19.1% | 1.29 |
+| HN: +1 h, 58% empty and hard-negative tiles | 0.17 | 81.5% (−5.1 to +0.3) | 26.1% | 0.24 | 57.5% (−5.3 to −2.4) | 24.4% | 1.11 |
+| control: +1 h, old tiles | 0.23 | 79.8% (−6.5 to −1.7) | 26.3% | 0.24 | 56.5% (−6.4 to −3.3) | 25.3% | 0.95 |
+| PW15: +30 min, missed people weigh 1.5× | 0.26 | 80.6% (−5.2 to −1.4) | 25.3% | 0.25 | 57.0% (−5.8 to −2.9) | 25.0% | 0.99 |
+| control: +30 min, old recipe | 0.21 | 82.8% (−2.7 to +0.5) | 21.5% | 0.32 | 59.6% (−3.0 to −0.5) | 19.9% | 1.17 |
 
-- **The diagnosis was right:** the hard negatives halved the false alarms and
-  raised the best F1 on both sets. The control, with the same extra training
-  on the old tiles, gained nothing.
-- **But the model became more cautious:** it finds 4.6 points fewer people at
-  threshold 0.2, and at recall ≥ 83% its precision is no better than v3's.
-  The gate (more precision without losing recall) is not passed, so v3 stays
-  the published model. For search and rescue, a missed person costs more than
-  a false alarm.
-- Next: fewer hard negatives per photo, or a loss that weighs missed people
-  more, to keep recall while cutting false alarms.
+- **Hard negatives did not cause the gain.** At matched operating points the
+  hard-negative model and its control are the same within noise. The fewer false
+  alarms reported on 2026-11-08 at threshold 0.2 came from the extra hour of
+  low-learning-rate training, which makes scores more cautious, not from the
+  empty tiles.
+- **Weighting missed people 1.5× did not keep recall.** Against its own control
+  it found 2.2 points fewer people on HERIDAL and 2.6 fewer on WiSARD.
+- **Every continuation trades people for false alarms.** Each one finds fewer
+  people on WiSARD than v3 at the same validation recall. Validation did not
+  predict this: it has only 317 people from one camera.
+- **Nothing passed the gate; v3 stays published.**
 
-Results: `ocr/artifacts/night-2026-11-08/evaluation_vox_*.json` in the
+**Pruning instead of training a small model from scratch.** `scripts/prune.py`
+removes the channels with the smallest batch-norm scale from v3 (network
+slimming), keeping the channels that are joined by Add layers in step, then
+trains the slim model for 30 minutes. The control trains the same architecture
+from scratch for the same 30 minutes. Width 0.7 gives 68,374 parameters
+(116 KB); width 0.5 gives the nano architecture (37,363 parameters, 78 KB as a QAT file).
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/voxhod-pruning-dark.svg">
+  <img alt="HERIDAL precision at 80% recall and WiSARD precision at 60% recall for pruned and from-scratch small models, three runs at width 0.5" src="docs/voxhod-pruning-light.svg">
+</picture>
+
+| int8 QAT file | Size | HERIDAL recall (vs v3, 95%) | Precision | False alarms per tile | Precision at 80% HERIDAL recall | WiSARD recall | NOMAD false alarms per tile |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| v3 (published) | 197 KB | 83.9% | 20.4% | 0.35 | 24.3% | 61.3% | 1.29 |
+| P07: pruned to 0.7 | 116 KB | 79.3% (−7.7 to −1.5) | 25.6% | 0.24 | 24.5% | 63.7% | 1.11 |
+| S07: 0.7 from scratch | 116 KB | 79.8% (−7.7 to −0.3) | 18.5% | 0.37 | 15.0% | 62.9% | 1.13 |
+| nano (published, PTQ) | 75 KB | 83.1% | 10.3% | 0.77 | 14.7% | 64.8% | 1.71 |
+| P05: pruned to 0.5, runs 1 / 2 / 3 | 78 KB | 82.0 / 81.2 / 78.5% | 15.2 / 20.2 / 21.7% | 0.48 / 0.34 / 0.30 | 18.6 / 20.2 / 17.6% | 67.9 / 65.4 / 62.5% | 1.77 / 1.50 / 1.40 |
+| S05: 0.5 from scratch, runs 1 / 2 / 3 | 78 KB | 83.3 / 83.1 / 82.3% | 12.7 / 18.0 / 12.2% | 0.61 / 0.40 / 0.63 | 14.7 / 27.0 / 16.0% | 69.0 / 62.4 / 69.7% | 1.63 / 1.11 / 1.48 |
+
+Threshold chosen on validation as above. Precision at 80% recall is read off each
+model's threshold curve on the test set. The three runs differ only in random
+data order, augmentation and (from scratch) starting weights.
+
+- **Runs of the same recipe differ a lot.** At width 0.5, precision at 80% recall
+  ranges from 17.6% to 20.2% for the pruned runs and from 14.7% to 27.0% from
+  scratch. A single run says little, so every small-model result here needs
+  repeats.
+- **Pruning is not better than training from scratch at width 0.5.** Averaged
+  over three runs, precision at 80% recall is the same (18.8% against 19.2%),
+  and the pruned runs find about 2 points fewer people on HERIDAL.
+- **At width 0.7 the single pruned run looks better** (24.5% against 15.0% at
+  80% recall, as good as v3 at 59% of its size), but it was not repeated, and
+  it finds 4.6 points fewer people than v3 at the matched operating point.
+- **All six 30-minute runs raise fewer false alarms than the published nano**
+  (0.30 to 0.63 against 0.77 per tile). They had quantization-aware training,
+  which the published nano did not.
+- **None replaces nano.** Picked by validation precision, the best candidate
+  (pruned run 3) finds 78.5% of people on HERIDAL against nano's 83.1%, and the
+  QAT files are 78 KB against nano's 75 KB. Nano stays published.
+
+Results: `ocr/artifacts/night-2026-11-08/` and `night-2026-11-09/` in the
 InviolusOCR repository, where the overnight runs are logged.
 
 ### Version history
 
-All rows: HERIDAL test set, int8 file, threshold 0.2.
+All rows: HERIDAL test set, int8 file, threshold 0.2. Runs from 2026-11-09 on
+are compared at matched operating points instead; see
+[Experiments](#experiments-fewer-false-alarms-without-losing-people-2026-11-08-and-09).
 
 | Version | Date | What changed | HERIDAL recall / precision | WiSARD recall / precision | Status |
 |---|---|---|---:|---:|---|
@@ -173,6 +260,9 @@ All rows: HERIDAL test set, int8 file, threshold 0.2.
 | v4 | 2026-11-06 | v3 + about 2 hours | 83.6% / 21.7% | 58.6% / 19.5% | not published: lower WiSARD recall |
 | control | 2026-11-08 | v3 + 1 GPU hour, old tiles | 81.7% / 22.1% | 58.8% / 21.0% | control only |
 | HN | 2026-11-08 | v3 + 1 GPU hour, 58% empty and hard-negative tiles | 79.3% / 31.8% | 54.8% / 30.3% | not published: lower recall |
+| V30, PW15 | 2026-11-09 | v3 + 30 min; PW15 weighs missed people 1.5× | see Experiments | see Experiments | not published: lower recall |
+| P07, S07 | 2026-11-09 | width 0.7 (116 KB): pruned from v3, and from scratch | see Experiments | see Experiments | not published: lower HERIDAL recall |
+| P05, S05 | 2026-11-09 | width 0.5 (nano size): pruned from v3, and from scratch, 3 runs each | see Experiments | see Experiments | not published: no run beat nano at the same recall |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
@@ -193,12 +283,16 @@ Rule for every step: **the device model does not grow** beyond 197 KB (v3)
 and 75 KB (nano). Larger models are only allowed as teachers. A step ships
 only if it passes its gate.
 
+Every gate is checked at matched operating points (threshold chosen on validation, see
+[Experiments](#experiments-fewer-false-alarms-without-losing-people-2026-11-08-and-09)).
+
 | Step | Why | Gate to ship | Status |
 |---|---|---|---|
-| Train with many more empty and hard-negative tiles | 89% of false alarms are on empty tiles; training has 29% empty tiles | HERIDAL precision above 20.4% at recall ≥ 83% (threshold 0.2), and WiSARD recall ≥ 61.3% | **tried 2026-11-08, not passed:** false alarms halved, recall 79.3%. Next: fewer hard negatives or a recall-weighted loss |
+| Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. Next: a larger teacher model (distillation), and more varied empty terrain with clear licences |
+| More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD; false alarms quadruple on NOMAD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
-| More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
-| Check the device output against the PC interpreter, measure on an ESP32-S3 | Only speed and memory are measured so far, on a P4 | Same detections on device and PC | open |
+| Smaller files by pruning v3 (network slimming) | A 116 KB file could replace v3 where RAM is short | Same gates as v3 or nano, over 3 runs | **tried 2026-11-09:** at width 0.5 no better than from scratch over 3 runs; one 0.7 run matched v3's precision at 80% recall but lost recall at the matched point. Next: repeat 0.7 |
+| Check the device output against the PC, measure on an ESP32-S3 | The output on the device was unchecked | Same people found on device and PC | **P4 done 2026-11-09:** same recall on 163 tiles; ESP32-S3 open |
 
 Training moved to a laptop GPU on 2026-11-07 (WSL2, TensorFlow 2.15.1), so
 each of these is a matter of hours instead of a night.
@@ -215,13 +309,27 @@ Measured on 2026-11-06 on one ESP32-P4 board (rev v1.3, 360 MHz, 32 MB flash, 32
 The weights stay in flash; the arena only holds the activations. Both models fit in internal SRAM.
 At 321 ms a tile, the P4 scans about 3 tiles a second.
 
-What this does and does not show:
+**Output on real tiles (2026-11-09).** 163 HERIDAL test tiles (149 people) were
+run through both published files on the same board and compared with the PC
+interpreter at threshold 0.2 ([benchmarks/esp32-p4-check](benchmarks/esp32-p4-check)):
 
-- Random int8 input: this is **speed and memory only**. The output was not compared with the PC
-  interpreter, so correctness on the device is unchecked.
-- Only the model inference is timed, not image decoding, resizing, box extraction.
+| File | Heatmap cells bit-identical | Largest difference | Recall, PC | Recall, device |
+|---|---:|---:|---:|---:|
+| v3 | 92.1% | 3 int8 steps | 81.9% | 81.9% |
+| nano | 48.8% | 6 int8 steps | 79.9% | 80.5% |
+
+- **The device finds the same people as the PC** within one person on these tiles.
+- The output is not bit-identical: the device's ESP-NN kernels round differently,
+  which adds or removes single detections near the threshold (16 of 163 tiles for v3).
+- ESP-NN's accelerated kernels are active on the P4. The first check firmware
+  crashed inside one of them (`esp_nn_conv_s8_1x1`); copying the model to a
+  16-byte aligned buffer and aligning the arena fixed it.
+
+What the timing does and does not show:
+
+- Random int8 input for the timing; only the model inference is timed, not image
+  decoding, resizing or box extraction.
 - It is an ESP32-P4, not an ESP32-S3. The numbers do not carry over to the S3, which has other cores.
-- Whether ESP-NN's accelerated kernels are active for the P4 was not checked, so the speed may improve.
 - One board. Source and raw output: [benchmarks/esp32-p4](https://github.com/ErdemWilkinson/InviolusOCR/tree/master/benchmarks/esp32-p4).
 
 ## Memory budget on ESP32 chips
@@ -259,7 +367,9 @@ is estimated at roughly 1.2 to 2.5 times the P4's (v3 about 0.4 to 0.8 s, nano a
   terrain. Recall falls by about 20 points on the one WiSARD clip. Snow, forest
   canopy, water, night and thermal are untested.
 - **Many false alarms:** at threshold 0.2 only one detection in five is a
-  person (see [Where the false alarms come from](#where-the-false-alarms-come-from)).
+  person (see [Where the false alarms come from](#where-the-false-alarms-come-from)),
+  and on unseen terrain (NOMAD) v3 raises about 1.3 false alarms per empty tile,
+  rising with flight height.
 - The 90% recall target is not reached on the test set (v3 88.7%, nano 89.5% at
   threshold 0.1, the lowest shown).
 - Boxes are coarse (stride 4). The model is built to say *where to look*, not
@@ -268,6 +378,10 @@ is estimated at roughly 1.2 to 2.5 times the P4's (v3 about 0.4 to 0.8 s, nano a
 ## License
 
 **Not trained on the Ferhat Tatık footage.** That footage is licensed to this project for non-commercial use only, so models trained on it are published separately as [VoxHOD-NC](https://github.com/ErdemWilkinson/VoxHOD-NC) (CC BY-NC 4.0). VoxHOD stays CC BY 4.0.
+
+External test data only, never trained on: one WiSARD clip (D. Broyles, C. R. Hayner,
+K. Leung, IROS 2022) and the NOMAD true-negative frames
+([ArtRuss/NOMAD](https://github.com/ArtRuss/NOMAD), CC BY 4.0).
 
 Code: [MIT](LICENSE). Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at

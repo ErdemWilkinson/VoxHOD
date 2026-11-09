@@ -1,0 +1,37 @@
+{
+ "tiles": 163,
+ "people": 149,
+ "threshold": 0.2,
+ "v3": {
+  "cells_identical": 0.9210697852760736,
+  "max_diff_steps": 3,
+  "cells_off_by_1": 0.07866180981595092,
+  "tiles_with_different_detections": 16,
+  "pc": {
+   "recall": 0.8187919463087249,
+   "precision": 0.6421052631578947,
+   "detections": 190
+  },
+  "device": {
+   "recall": 0.8187919463087249,
+   "precision": 0.6630434782608695,
+   "detections": 184
+  }
+ },
+ "nano": {
+  "cells_identical": 0.48833588957055213,
+  "max_diff_steps": 6,
+  "cells_off_by_1": 0.5088420245398773,
+  "tiles_with_different_detections": 27,
+  "pc": {
+   "recall": 0.7986577181208053,
+   "precision": 0.6397849462365591,
+   "detections": 186
+  },
+  "device": {
+   "recall": 0.8053691275167785,
+   "precision": 0.6382978723404256,
+   "detections": 188
+  }
+ }
+}

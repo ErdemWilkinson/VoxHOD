@@ -13,6 +13,8 @@ Environment:
   VOX_LR           float base learning rate (default 2e-3; use a lower one with VOX_WARM_START)
   VOX_QAT_MINUTES  quantization-aware fine-tuning budget after float training (0 = skip)
   VOX_THREADS      CPU threads
+  VOX_WIDTH        filter multiplier (0.5 = nano)
+  VOX_POS_WEIGHT   weight of the focal-loss term at person centres (default 1)
 """
 from __future__ import annotations
 
@@ -30,6 +32,7 @@ ARTIFACTS = Path(os.environ.get("VOX_ARTIFACTS", ROOT / "artifacts"))
 TILE, STRIDE = 160, 4
 GRID = TILE // STRIDE
 WIDTH = float(os.environ.get("VOX_WIDTH", "1"))  # filter multiplier for smaller models
+POS_WEIGHT = float(os.environ.get("VOX_POS_WEIGHT", "1"))  # >1 weights person centres up (favours recall)
 if os.environ.get("VOX_THREADS"):
     tf.config.threading.set_intra_op_parallelism_threads(int(os.environ["VOX_THREADS"]))
     tf.config.threading.set_inter_op_parallelism_threads(1)
@@ -100,7 +103,7 @@ def detection_loss(target, output):
     heat, mask = target[..., 0], target[..., 3]
     pred = tf.clip_by_value(output[..., 0], 1e-4, 1 - 1e-4)
     positive = tf.cast(tf.equal(heat, 1.0), tf.float32)
-    focal = -(positive * (1 - pred) ** 2 * tf.math.log(pred)
+    focal = -(POS_WEIGHT * positive * (1 - pred) ** 2 * tf.math.log(pred)
               + (1 - positive) * (1 - heat) ** 4 * pred ** 2 * tf.math.log(1 - pred))
     count = tf.maximum(tf.reduce_sum(positive), 1.0)
     size = tf.reduce_sum(mask[..., None] * tf.abs(output[..., 1:3] - target[..., 1:3]))

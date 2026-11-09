@@ -1,0 +1,4 @@
+INFO tiles=200 v3_at=0x4004bbe0 nano_at=0x4007bc8c
+CHECK model=v3 status=OK tiles=200 arena_used=331804 invoke_ms_mean=339.59
+CHECK model=nano status=OK tiles=200 arena_used=217596 invoke_ms_mean=158.05
+DONE
