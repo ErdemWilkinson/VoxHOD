@@ -61,9 +61,9 @@ def main() -> None:
     roadmap(DOCS / "roadmap-voxhod", "VoxHOD roadmap",
             "Rule: the device model never grows; larger models are only teachers. A step ships only if it passes its gate.",
             ["Next", "This week", "Later"],
-            [("VoxHOD", [[("A larger validation split", "Matched on 317 validation people, models still land between 77% and 87% test recall; fix this before more comparisons", True),
+            [("VoxHOD", [[("Retrain v3 and nano on the held-out split", "New validation (2026-11-10, 739 people from unseen locations) halves the spread to 5 points; published files must be retrained to be compared on it", True),
                           ("Fewer false alarms, same recall", "Tried 2026-11-08/09: hard negatives, 1.5x weight, extra training, pruning and a QAT nano all slid along the same trade-off. Next: a larger teacher", False)],
-                         [("More varied empty terrain", "NOMAD: 1.3 false alarms per empty tile, 4x HERIDAL. Gate: fewer on NOMAD, same recall", False),
+                         [("Empty frames from other cameras", "2026-11-10: empty NOMAD frames halve NOMAD false alarms at the same recall, but only for that camera; WiSARD unchanged", False),
                           ("Find small people more often", "Gate: ≥ 85% of 8-16 px people, same file size", False)],
                          [("More varied aerial data (full WiSARD, SeaDronesSee)", "Gate: WiSARD recall > 61.3% without losing HERIDAL", False),
                           ("Measure on an ESP32-S3", "P4 checked 2026-11-09: same recall as the PC on 163 tiles", False)]])])

@@ -34,7 +34,8 @@ SPLITS = tuple(os.environ.get("VOX_SPLITS", "val,test,wisard").split(","))  # va
 
 
 def heatmaps(path: Path, images: np.ndarray) -> np.ndarray:
-    interpreter = tf.lite.Interpreter(model_path=str(path), num_threads=os.cpu_count())
+    threads = int(os.environ.get("VOX_THREADS", os.cpu_count()))  # fewer when a GPU job shares the CPU
+    interpreter = tf.lite.Interpreter(model_path=str(path), num_threads=threads)
     interpreter.allocate_tensors()
     inp, out = interpreter.get_input_details()[0], interpreter.get_output_details()[0]
     (si, zi), (so, zo) = inp["quantization"], out["quantization"]

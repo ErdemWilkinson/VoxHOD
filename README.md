@@ -69,6 +69,13 @@ VOX_SPLITS=val,test,wisard,nomad_tn python scripts/threshold_sweep.py sweep/ v3=
 # prune v3 to 70% width, then continue training it from the pruned weights
 VOX_WIDTH=0.7 python scripts/prune.py artifacts_v3/voxhod.keras pruned_0.7.h5
 VOX_WIDTH=0.7 VOX_WARM_START=pruned_0.7.h5 VOX_LR=1e-3 VOX_MAX_MINUTES=30 VOX_QAT_MINUTES=10 python scripts/train.py
+
+# held-out-location validation split; half of NOMAD's empty frames added to training
+python scripts/prepare_heridal_groups.py <heridal_voc_folder> D:/datasets/voxhod_g
+python scripts/prepare_nomad_split.py D:/datasets/voxhod/nomad_tn.npz D:/datasets/voxhod_g D:/datasets/voxhod_gn
+# mean of repeated runs of two recipes (VOX_THREADS limits TFLite threads)
+VOX_THREADS=4 VOX_DATA=D:/datasets/voxhod_g VOX_SPLITS=val,test,wisard,nomad_tn_test python scripts/threshold_sweep.py sweep_g/ GA1=... GB1=...
+python scripts/compare_arms.py sweep_g/ D:/datasets/voxhod_g A=GA1,GA2,GA3 B=GB1,GB2,GB3
 ```
 
 ## Results
@@ -276,8 +283,70 @@ test sets, here with nano as the reference of the bootstrap.
   than −1.5" only lets a clearly better model through. The gate was not
   loosened after seeing the results.
 
-Results: `ocr/artifacts/night-2026-11-08/` and `night-2026-11-09/` in the
-InviolusOCR repository, where the overnight runs are logged.
+**A held-out validation split, and empty NOMAD terrain in training (2026-11-10 night).**
+The old validation list turned out to be a random 10% of the training photo
+sequences: `train_BRA_1025` is in validation while `1024` and `1026` are in
+training. Validation photos had near-twins in training, unlike the test photos,
+which come from separate flights. `scripts/prepare_heridal_groups.py` builds a
+new split: **validation = every photo of the five locations that never occur in
+the test set** (VRD, GOR, JAS, RAK, BLA; 840 photos, 739 people), training = all
+other train and validation photos (706 photos). Test is unchanged. Training
+therefore has about 55% of the old tiles, so none of these runs can be compared
+with the published files; they only compare recipes with each other.
+
+Two questions, all models at nano size (width 0.5, 30 minutes from scratch on
+the GPU plus 10 minutes of QAT, 78 KB), 3 runs per recipe:
+
+- **Does a small network run out of room?** Published v3 and nano scored on
+  every fourth training tile (`train_sub`) and on test, at the val-matched
+  threshold: both find 94% of the people in their own training tiles and about
+  84% on test, so **recall is not limited by size**. But nano raises 0.92 false
+  alarms per training tile against v3's 0.59: **telling people from look-alikes
+  is where the small network is short of room**, even on data it has seen.
+- **Do empty tiles of unseen terrain help?** `scripts/prepare_nomad_split.py`
+  splits the 500 NOMAD frames by flight distance: the first 50 frames of each
+  distance (2,000 empty tiles) are added to training for recipe B, the last 50
+  (2,000 tiles) are only used for testing. Recipe A is the same without them.
+
+At the threshold chosen on the new validation set (the protocol above),
+`scripts/compare_arms.py`, mean of 3 runs, range in brackets, 95% interval of
+B − A by bootstrap over tiles:
+
+| Mean of 3 runs | A: no NOMAD | B: + NOMAD empty tiles | B − A (95%) |
+|---|---:|---:|---:|
+| HERIDAL recall | 77.4% (76.1–80.1) | 81.1% (80.6–81.5) | +1.5 to +6.0 points |
+| HERIDAL false alarms per tile | 0.38 (0.28–0.57) | 0.65 (0.61–0.74) | +0.25 to +0.30 |
+| WiSARD recall | 61.4% (59.0–65.4) | 67.5% (57.8–75.8) | +4.7 to +7.3 points |
+| NOMAD false alarms per tile (held-out half) | 1.10 (0.77–1.56) | 0.75 (0.64–0.81) | −0.41 to −0.28 |
+
+At the same HERIDAL test recall (78–79%, threshold read off each run's test
+curve; an analysis, not a selection rule):
+
+| Mean of 3 runs | A: no NOMAD | B: + NOMAD empty tiles |
+|---|---:|---:|
+| HERIDAL false alarms per tile | 0.45 (0.33–0.55) | 0.42 (0.37–0.51) |
+| NOMAD false alarms per tile | 1.24 (0.87–1.47) | **0.53 (0.52–0.54)** |
+| WiSARD recall | 64.1% (62.2–66.1) | 63.7% (55.9–70.3) |
+| WiSARD false alarms per tile | 0.67 (0.36–0.94) | 0.47 (0.41–0.52) |
+
+- **The new validation set places models better, but not tightly.** Matched
+  there, test recall lands within −2.7 to +3.0 points of validation recall and
+  spreads over 5.4 points (76.1–81.5%), against 10 points (77–87%) with the old
+  list. It does not meet the ±1 point gate: the B runs land systematically
+  higher on test than the A runs.
+- **Empty NOMAD tiles more than halve false alarms on held-out NOMAD frames at
+  the same HERIDAL recall**, every B run below every A run, with no cost on
+  HERIDAL and WiSARD recall. The held-out frames come from the same camera and
+  the same flights as the training half, so this shows the model can learn a
+  terrain from empty tiles; it does not show a gain on terrain it has never seen
+  (WiSARD recall at the same HERIDAL recall is unchanged).
+- **The shipping gate is not passed.** At the val-matched threshold B finds more
+  people but raises 71% more false alarms on HERIDAL: its scores shift between
+  the validation and the test photos. Nothing is published; v3 and nano stay.
+
+Results: `ocr/artifacts/night-2026-11-08/`, `night-2026-11-09/` and
+`night-2026-11-10/` in the InviolusOCR repository, where the overnight runs are
+logged.
 
 ### Version history
 
@@ -298,6 +367,7 @@ are compared at matched operating points instead; see
 | P07, S07 | 2026-11-09 | width 0.7 (116 KB): pruned from v3, and from scratch | see Experiments | see Experiments | not published: lower HERIDAL recall |
 | P05, S05 | 2026-11-09 | width 0.5 (nano size): pruned from v3, and from scratch, 3 runs each | see Experiments | see Experiments | not published: no run beat nano at the same recall |
 | NQ, NC30, S05d | 2026-11-09 | nano + QAT; nano + 30 min; a 4th from-scratch run | see Experiments | see Experiments | not published: picked on validation, it lost recall |
+| GA1–3, GB1–3 | 2026-11-10 | nano recipe on a held-out-location split (55% of the tiles); GB adds 2,000 empty NOMAD tiles | see Experiments | see Experiments | recipe comparison only, not publishable: smaller training set |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
@@ -326,7 +396,8 @@ Every gate is checked at matched operating points (threshold chosen on validatio
 | Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. Next: a larger teacher model (distillation), and more varied empty terrain with clear licences |
 | More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD; false alarms quadruple on NOMAD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
-| A larger validation split | 317 validation people cannot place models at the same operating point: matched there, their test recall spreads from 77% to 87% | Thresholds chosen on validation land within ±1 point of the target recall on test | **next** |
+| A larger validation split | 317 validation people cannot place models at the same operating point: matched there, their test recall spreads from 77% to 87% | Thresholds chosen on validation land within ±1 point of the target recall on test | **done 2026-11-10, gate not met:** held-out locations, 739 people; spread down to 5.4 points (76–81.5%), ±3 points. Next: retrain v3 and nano on the new split so published files can be compared on it |
+| Empty frames of new terrain in training | NOMAD false alarms are 4× HERIDAL's | Same as the first row | **tried 2026-11-10:** halves held-out NOMAD false alarms at the same HERIDAL recall (same camera and flights), no change on WiSARD; at the val-matched point HERIDAL false alarms rose. Next: empty frames from other cameras |
 | Smaller files by pruning v3 (network slimming) | A 116 KB file could replace v3 where RAM is short | Same gates as v3 or nano, over 3 runs | **tried 2026-11-09:** at width 0.5 no better than from scratch over 3 runs; one 0.7 run matched v3's precision at 80% recall but lost recall at the matched point. Next: repeat 0.7 |
 | Check the device output against the PC, measure on an ESP32-S3 | The output on the device was unchecked | Same people found on device and PC | **P4 done 2026-11-09:** same recall on 163 tiles; ESP32-S3 open |
 
@@ -415,9 +486,10 @@ is estimated at roughly 1.2 to 2.5 times the P4's (v3 about 0.4 to 0.8 s, nano a
 
 **Not trained on the Ferhat Tatık footage.** That footage is licensed to this project for non-commercial use only, so models trained on it are published separately as [VoxHOD-NC](https://github.com/ErdemWilkinson/VoxHOD-NC) (CC BY-NC 4.0). VoxHOD stays CC BY 4.0.
 
-External test data only, never trained on: one WiSARD clip (D. Broyles, C. R. Hayner,
-K. Leung, IROS 2022) and the NOMAD true-negative frames
-([ArtRuss/NOMAD](https://github.com/ArtRuss/NOMAD), CC BY 4.0).
+External test data, never in the published weights: one WiSARD clip (D. Broyles,
+C. R. Hayner, K. Leung, IROS 2022) and the NOMAD true-negative frames
+([ArtRuss/NOMAD](https://github.com/ArtRuss/NOMAD), CC BY 4.0). Half of the NOMAD
+frames were used in training in the unpublished 2026-11-10 experiment (GB runs).
 
 Code: [MIT](LICENSE). Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
