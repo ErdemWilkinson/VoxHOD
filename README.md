@@ -538,7 +538,9 @@ C. R. Hayner, K. Leung, IROS 2022) and the NOMAD true-negative frames
 ([ArtRuss/NOMAD](https://github.com/ArtRuss/NOMAD), CC BY 4.0). Half of the NOMAD
 frames were used in training in the unpublished 2026-11-10 experiment (GB runs).
 
-Code: [MIT](LICENSE). Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
+Code: [Apache License 2.0](LICENSE) since 2026-11-11 (earlier commits, up to `82a0325`, were
+MIT). If you redistribute the code or a work based on it, keep the [NOTICE](NOTICE) file and
+credit "VoxHOD by Erdem Aslan" with a link to this repository. Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
 see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
 [inviolus/VoxHOD](https://huggingface.co/inviolus/VoxHOD).
 

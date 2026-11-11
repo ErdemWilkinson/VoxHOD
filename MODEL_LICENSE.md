@@ -1,6 +1,7 @@
 # Model and data licensing
 
-The **code** in this repository is MIT licensed (see `LICENSE`).
+The **code** in this repository is licensed under the Apache License 2.0 (see `LICENSE` and
+`NOTICE`; commits up to `82a0325` were MIT).
 
 The **trained VoxHOD weights** (`voxhod.keras`, `voxhod_int8.tflite`,
 `voxhod_qat_int8.tflite`, and the `voxhod_nano` files) are released under
