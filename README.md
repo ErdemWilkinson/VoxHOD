@@ -401,6 +401,18 @@ only if it passes its gate.
 Every gate is checked at matched operating points (threshold chosen on validation, see
 [Experiments](#experiments-fewer-false-alarms-without-losing-people-2026-11-08-and-09)).
 
+From 2026-11-11 on, for new experiments only (results before that keep their verdict):
+
+- **Threshold:** chosen on the held-out validation split so that each model raises the
+  same number of false alarms per tile there (a false-alarm budget), because an
+  operator can only handle so many alerts.
+- **Decision:** the 95% interval comes from a hierarchical bootstrap that resamples runs,
+  then test photos (and NOMAD frames), not single tiles. Tile-level intervals were about
+  3.5 times too narrow.
+- **Also reported:** recall at a fixed number of false alarms per tile, read off each
+  model's test curve.
+- At least 3 runs per recipe, with fixed seeds.
+
 | Step | Why | Gate to ship | Status |
 |---|---|---|---|
 | Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. Next: a larger teacher model (distillation), and more varied empty terrain with clear licences |
