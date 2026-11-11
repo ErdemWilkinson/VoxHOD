@@ -15,6 +15,10 @@ Environment:
   VOX_THREADS      CPU threads
   VOX_WIDTH        filter multiplier (0.5 = nano)
   VOX_POS_WEIGHT   weight of the focal-loss term at person centres (default 1)
+  VOX_SEED         integer: fixes the initial weights and the random streams; runs are still not
+                   identical (GPU kernels, parallel augmentation, time-based epoch count)
+  VOX_KEEP         "best" keeps the lowest-val_loss weights in voxhod.keras; by default the
+                   final weights are kept there and the best ones go to voxhod_best.keras
 """
 from __future__ import annotations
 
@@ -33,6 +37,12 @@ TILE, STRIDE = 160, 4
 GRID = TILE // STRIDE
 WIDTH = float(os.environ.get("VOX_WIDTH", "1"))  # filter multiplier for smaller models
 POS_WEIGHT = float(os.environ.get("VOX_POS_WEIGHT", "1"))  # >1 weights person centres up (favours recall)
+if os.environ.get("VOX_SEED"):
+    tf.keras.utils.set_random_seed(int(os.environ["VOX_SEED"]))  # Python, NumPy and TensorFlow
+    # Off by default: on the GPU (TF 2.15) it fails with UnimplementedError, an op without a
+    # deterministic kernel. With the seed alone, two 1-epoch runs gave val_loss 3.19 and 3.22.
+    if os.environ.get("VOX_DETERMINISTIC") == "1":
+        tf.config.experimental.enable_op_determinism()
 if os.environ.get("VOX_THREADS"):
     tf.config.threading.set_intra_op_parallelism_threads(int(os.environ["VOX_THREADS"]))
     tf.config.threading.set_inter_op_parallelism_threads(1)
@@ -150,12 +160,12 @@ class TimeCosine(tf.keras.callbacks.Callback):
     are mostly empty terrain while train tiles are mostly people, so val_loss
     swings and picked an epoch-1 model in the first run."""
 
-    def __init__(self, base_lr: float, minutes: float):
+    def __init__(self, base_lr: float, minutes: float, save_best_to: Path | None = None):
         super().__init__()
-        self.base_lr, self.seconds = base_lr, minutes * 60.0
+        self.base_lr, self.seconds, self.save_best_to = base_lr, minutes * 60.0, save_best_to
 
     def on_train_begin(self, logs=None):
-        self.started, self.best, self.weights = time.monotonic(), float("inf"), None
+        self.started, self.best, self.weights, self.best_epoch = time.monotonic(), float("inf"), None, 0
 
     def on_epoch_begin(self, epoch, logs=None):
         progress = min((time.monotonic() - self.started) / self.seconds, 1.0)
@@ -164,7 +174,7 @@ class TimeCosine(tf.keras.callbacks.Callback):
 
     def on_epoch_end(self, epoch, logs=None):
         if logs["val_loss"] < self.best:
-            self.best, self.weights = logs["val_loss"], self.model.get_weights()
+            self.best, self.weights, self.best_epoch = logs["val_loss"], self.model.get_weights(), epoch + 1
         elapsed = time.monotonic() - self.started
         if elapsed + elapsed / (epoch + 1) > self.seconds:
             self.model.stop_training = True
@@ -173,6 +183,12 @@ class TimeCosine(tf.keras.callbacks.Callback):
     def on_train_end(self, logs=None):
         if self.weights is not None and os.environ.get("VOX_KEEP") == "best":
             self.model.set_weights(self.weights)
+        elif self.weights is not None and self.save_best_to is not None:
+            final = self.model.get_weights()
+            self.model.set_weights(self.weights)
+            self.model.save(self.save_best_to)
+            self.model.set_weights(final)
+            print(f"Best val_loss weights ({self.best:.4f}, epoch {self.best_epoch}) saved to {self.save_best_to}", flush=True)
 
 
 def to_int8_tflite(model: tf.keras.Model, name: str) -> Path:
@@ -191,10 +207,10 @@ def to_int8_tflite(model: tf.keras.Model, name: str) -> Path:
     return path
 
 
-def fit(model, train, val, lr, minutes):
+def fit(model, train, val, lr, minutes, save_best_to=None):
     model.compile(tf.keras.optimizers.Adam(lr, clipnorm=5.0), loss=detection_loss)
     return model.fit(train, validation_data=val, epochs=1000, verbose=2,
-                     callbacks=[TimeCosine(lr, minutes)]).history
+                     callbacks=[TimeCosine(lr, minutes, save_best_to)]).history
 
 
 def main() -> None:
@@ -209,7 +225,8 @@ def main() -> None:
         model.set_weights(tf.keras.models.load_model(os.environ["VOX_WARM_START"], compile=False).get_weights())
         print(f"Warm start from {os.environ['VOX_WARM_START']}", flush=True)
     print(f"VoxHOD parameters: {model.count_params():,}", flush=True)
-    history = fit(model, train, val, float(os.environ.get("VOX_LR", "2e-3")), float(os.environ.get("VOX_MAX_MINUTES", 60)))
+    history = fit(model, train, val, float(os.environ.get("VOX_LR", "2e-3")), float(os.environ.get("VOX_MAX_MINUTES", 60)),
+                  save_best_to=ARTIFACTS / "voxhod_best.keras")
     model.save(ARTIFACTS / "voxhod.keras")
     (ARTIFACTS / "history.json").write_text(json.dumps({k: [float(v) for v in vs] for k, vs in history.items()}))
     calibration = np.random.default_rng(7).choice(len(train_images), min(300, len(train_images)), replace=False)

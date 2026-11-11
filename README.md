@@ -354,9 +354,33 @@ curve; an analysis, not a selection rule):
   people but raises 71% more false alarms on HERIDAL: its scores shift between
   the validation and the test photos. Nothing is published; v3 and nano stay.
 
-Results: `ocr/artifacts/night-2026-11-08/`, `night-2026-11-09/` and
-`night-2026-11-10/` in the InviolusOCR repository, where the overnight runs are
-logged.
+**Keep the best epoch instead of the last? (2026-11-11, new gate).** In every
+run the validation loss is lowest after 10–55% of the training, so keeping
+those weights looked like a free gain. `train.py` now always writes the
+lowest-validation-loss weights to `voxhod_best.keras` next to the final ones,
+and takes `VOX_SEED`. Three seeds of the nano recipe on the held-out split
+(30 minutes + 10 minutes of QAT for each of the two weight sets); the two files
+of a pair come from the same training run, so the bootstrap resamples pairs
+(`scripts/arms_hier.py`, `ARMS_PAIRED=1`). Threshold from the validation
+false-alarm budget (0.61 per tile):
+
+| Mean of 3 seeds | Last epoch | Best val-loss epoch | Best − last (95%, runs + photos) |
+|---|---:|---:|---:|
+| HERIDAL recall | 78.9% | 76.1% | −5.3 to −0.8 points |
+| HERIDAL false alarms per tile | 0.32 | 0.32 | −0.03 to +0.02 |
+| Recall at 0.3 false alarms per tile (test curve) | 77.7% | 75.1% | −5.2 to −0.1 points |
+| WiSARD recall (one clip, no interval) | 60.1% | 59.6% | |
+
+- **Keeping the best validation-loss epoch loses about 3 points of recall** at
+  the same false-alarm rate. The last epoch stays the default; validation loss
+  is not a good stand-in for recall at a fixed alert rate.
+- The seed fixes the initial weights, but two runs with the same seed still
+  differ slightly (GPU kernels, parallel augmentation, time-based epoch count).
+  TensorFlow's op determinism fails on this model on the GPU.
+
+Results: `ocr/artifacts/night-2026-11-08/`, `night-2026-11-09/`,
+`night-2026-11-10/` and `day-2026-11-11/` in the InviolusOCR repository, where
+the runs are logged.
 
 ### Version history
 
@@ -378,6 +402,7 @@ are compared at matched operating points instead; see
 | P05, S05 | 2026-11-09 | width 0.5 (nano size): pruned from v3, and from scratch, 3 runs each | see Experiments | see Experiments | not published: no run beat nano at the same recall |
 | NQ, NC30, S05d | 2026-11-09 | nano + QAT; nano + 30 min; a 4th from-scratch run | see Experiments | see Experiments | not published: picked on validation, it lost recall |
 | GA1–3, GB1–3 | 2026-11-10 | nano recipe on a held-out-location split (55% of the tiles); GB adds 2,000 empty NOMAD tiles | see Experiments | see Experiments | recipe comparison only, not publishable: smaller training set |
+| K1–3 L/B | 2026-11-11 | nano recipe, 3 seeds, last epoch vs best validation-loss epoch | see Experiments | see Experiments | last epoch kept: best epoch lost ~3 points of recall |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
