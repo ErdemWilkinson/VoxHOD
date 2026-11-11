@@ -335,11 +335,21 @@ curve; an analysis, not a selection rule):
   list. It does not meet the ±1 point gate: the B runs land systematically
   higher on test than the A runs.
 - **Empty NOMAD tiles more than halve false alarms on held-out NOMAD frames at
-  the same HERIDAL recall**, every B run below every A run, with no cost on
-  HERIDAL and WiSARD recall. The held-out frames come from the same camera and
-  the same flights as the training half, so this shows the model can learn a
-  terrain from empty tiles; it does not show a gain on terrain it has never seen
-  (WiSARD recall at the same HERIDAL recall is unchanged).
+  the same HERIDAL recall**, every B run below every A run. HERIDAL recall at
+  that point is unchanged, but B is not free on HERIDAL: on the validation
+  locations B raises more false alarms than A at the matched threshold (0.70
+  against 0.47 per tile). The held-out NOMAD frames come from the same camera
+  and the same flights as the training half, seconds apart, so this shows the
+  model can learn one terrain from its empty tiles; it does not show a gain on
+  terrain it has never seen (WiSARD recall at the same HERIDAL recall is
+  unchanged).
+- **The intervals in the table above are too narrow.** They resample single
+  tiles with the runs fixed, but tiles of one photo (and of one NOMAD frame) are
+  correlated, the 372 test people sit in only 101 photos, and run-to-run spread
+  is left out. A re-analysis on 2026-11-11 that resamples runs, then photos and
+  frames, widens them about 3.5 times: B − A HERIDAL recall becomes −0.5 to +7.9
+  points (no longer clearly above 0) and HERIDAL false alarms +0.10 to +0.45.
+  WiSARD is one clip and gets no interval.
 - **The shipping gate is not passed.** At the val-matched threshold B finds more
   people but raises 71% more false alarms on HERIDAL: its scores shift between
   the validation and the test photos. Nothing is published; v3 and nano stay.
