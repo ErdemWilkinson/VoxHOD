@@ -17,6 +17,11 @@ Environment:
   VOX_POS_WEIGHT   weight of the focal-loss term at person centres (default 1)
   VOX_SEED         integer: fixes the initial weights and the random streams; runs are still not
                    identical (GPU kernels, parallel augmentation, time-based epoch count)
+  VOX_ARCH         "effb0": teacher only (never deployed), ImageNet EfficientNet-B0 backbone on the
+                   tile resized to 320 px, same 40x40 head; default: the VoxHOD network
+  VOX_TEACHER_HEAT .npy of teacher heatmaps [train tiles, 40, 40] for distillation into the student
+  VOX_KD_WEIGHT    weight of the squared difference to the teacher heatmap (default 1)
+  VOX_BATCH        batch size (default 32)
   VOX_KEEP         "best" keeps the lowest-val_loss weights in voxhod.keras; by default the
                    final weights are kept there and the best ones go to voxhod_best.keras
 """
@@ -37,6 +42,9 @@ TILE, STRIDE = 160, 4
 GRID = TILE // STRIDE
 WIDTH = float(os.environ.get("VOX_WIDTH", "1"))  # filter multiplier for smaller models
 POS_WEIGHT = float(os.environ.get("VOX_POS_WEIGHT", "1"))  # >1 weights person centres up (favours recall)
+ARCH = os.environ.get("VOX_ARCH", "voxhod")
+KD_WEIGHT = float(os.environ.get("VOX_KD_WEIGHT", "1"))
+BATCH = int(os.environ.get("VOX_BATCH", "32"))
 if os.environ.get("VOX_SEED"):
     tf.keras.utils.set_random_seed(int(os.environ["VOX_SEED"]))  # Python, NumPy and TensorFlow
     # Off by default: on the GPU (TF 2.15) it fails with UnimplementedError, an op without a
@@ -65,7 +73,29 @@ def separable(x, filters, stride=1):
     return y
 
 
+def build_teacher() -> tf.keras.Model:
+    """Teacher for distillation only: ImageNet EfficientNet-B0 (Keras weights, Apache 2.0) on the
+    tile resized to 320 px, features at strides 8/16/32 (40/20/10 cells) merged like the VoxHOD
+    neck, same heat + size head. Float, never quantized or deployed."""
+    image = tf.keras.Input((TILE, TILE, 3), name="image")
+    x = tf.keras.layers.Rescaling(127.5, offset=127.5)(image)  # [-1, 1] -> [0, 255], as EfficientNet expects
+    x = tf.keras.layers.Resizing(2 * TILE, 2 * TILE)(x)
+    base = tf.keras.applications.EfficientNetB0(include_top=False, weights="imagenet", input_tensor=x)
+    c8, c16, c32 = (base.get_layer(n).output for n in ("block3b_add", "block5c_add", "top_activation"))
+    p = conv_bn(c32, 96, 1)
+    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c16, 96, 1)])
+    p = conv_bn(p, 96, 3)                                  # 20
+    p = tf.keras.layers.Add()([tf.keras.layers.UpSampling2D()(p), conv_bn(c8, 96, 1)])
+    p = conv_bn(p, 96, 3)                                  # 40
+    heat = tf.keras.layers.Conv2D(1, 1, activation="sigmoid", name="heat",
+                                  bias_initializer=tf.keras.initializers.Constant(-2.19))(p)
+    size = tf.keras.layers.Conv2D(2, 1, name="size")(p)
+    return tf.keras.Model(image, tf.keras.layers.Concatenate(name="detections")([heat, size]))
+
+
 def build_model() -> tf.keras.Model:
+    if ARCH == "effb0":
+        return build_teacher()
     w = lambda filters: int(filters * WIDTH)
     image = tf.keras.Input((TILE, TILE, 3), name="image")
     x = conv_bn(image, w(16), 3, 2)                       # 80
@@ -106,7 +136,13 @@ def encode_targets(boxes: np.ndarray, counts: np.ndarray) -> np.ndarray:
 
 def load_split(name: str) -> tuple[np.ndarray, np.ndarray]:
     data = np.load(DATA / f"{name}.npz")
-    return data["images"], encode_targets(data["boxes"], data["counts"])
+    targets = encode_targets(data["boxes"], data["counts"])
+    if name == "train" and os.environ.get("VOX_TEACHER_HEAT"):  # 5th channel: teacher heatmap
+        teacher = np.load(os.environ["VOX_TEACHER_HEAT"]).astype(np.float32)
+        assert teacher.shape == targets.shape[:3], (teacher.shape, targets.shape)
+        targets = np.concatenate([targets, teacher[..., None]], -1)
+        print(f"Distilling from {os.environ['VOX_TEACHER_HEAT']} (weight {KD_WEIGHT})", flush=True)
+    return data["images"], targets
 
 
 def detection_loss(target, output):
@@ -117,7 +153,11 @@ def detection_loss(target, output):
               + (1 - positive) * (1 - heat) ** 4 * pred ** 2 * tf.math.log(1 - pred))
     count = tf.maximum(tf.reduce_sum(positive), 1.0)
     size = tf.reduce_sum(mask[..., None] * tf.abs(output[..., 1:3] - target[..., 1:3]))
-    return tf.reduce_sum(focal) / count + 0.1 * size / count
+    loss = tf.reduce_sum(focal) / count + 0.1 * size / count
+    if target.shape[-1] > 4:  # distillation: match the teacher's heatmap everywhere, per tile
+        tiles = tf.cast(tf.shape(target)[0], tf.float32)  # (per centre it was ~20x the focal term)
+        loss += KD_WEIGHT * tf.reduce_sum((output[..., 0] - target[..., 4]) ** 2) / tiles
+    return loss
 
 
 def augment(image, target):
@@ -132,7 +172,8 @@ def augment(image, target):
         image, target = tf.image.flip_up_down(image), tf.image.flip_up_down(target)
     if tf.random.uniform([]) < 0.5:
         image, target = tf.image.rot90(image), tf.image.rot90(target)
-        target = tf.stack([target[..., 0], target[..., 2], target[..., 1], target[..., 3]], -1)
+        # turning swaps width and height; extra channels (teacher heat) just turn with the grid
+        target = tf.concat([target[..., 0:1], target[..., 2:3], target[..., 1:2], target[..., 3:]], -1)
     image = tf.image.random_saturation(image, 0.6, 1.4)
     image = tf.image.random_brightness(image, 0.25)
     image = tf.image.random_contrast(image, 0.6, 1.4)
@@ -150,7 +191,7 @@ def dataset(images, targets, train: bool) -> tf.data.Dataset:
         data = data.shuffle(len(images)).map(augment, num_parallel_calls=tf.data.AUTOTUNE)
     else:
         data = data.map(lambda x, y: (tf.cast(x, tf.float32) / 127.5 - 1.0, y))
-    return data.batch(32).prefetch(tf.data.AUTOTUNE)
+    return data.batch(BATCH).prefetch(tf.data.AUTOTUNE)
 
 
 class TimeCosine(tf.keras.callbacks.Callback):
