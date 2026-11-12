@@ -19,7 +19,10 @@ text. Text and people are kept in separate models so that each stays small.
 WiSARD clip and on 4,000 empty NOMAD tiles from another camera. Speed, memory
 and the output on real tiles are checked on an ESP32-P4 board. Not yet run in
 flight. Published: v3 (197 KB) and nano (75 KB) on
-[Hugging Face](https://huggingface.co/inviolus/VoxHOD). See
+[Hugging Face](https://huggingface.co/inviolus/VoxHOD), and since 2026-11-13
+**[VoxHOD Large](#voxhod-large)** (EfficientNet-B0 backbone, 4.4 M parameters, 5.2 MB int8):
+about 6 to 9 times fewer false alarms at the same recall, too large for a microcontroller
+scan of every tile (its int8 file and device speed are not measured yet). See
 [Results](#results), [Version history](#version-history) and
 [Roadmap](#roadmap).
 
@@ -118,6 +121,53 @@ Thresholds are fixed here rather than picked on the test set.
   over to other cameras and scenes.
 - **int8 costs nothing measurable.** The QAT int8 file is within about half a
   point of the float model.
+
+### VoxHOD Large
+
+A larger model for when a microcontroller is not the limit: a ground station, a phone, a
+companion computer, or a second stage that checks only the few tiles a small model ranks
+highest. Same input and output as v3 and nano.
+
+- **Backbone:** EfficientNet-B0 initialised with ImageNet weights from Keras
+  (Apache 2.0, © Google), tile resized to 320 px inside the model, stride 8/16/32
+  features merged into the same 40×40 head. 4,355,142 parameters.
+- **Training:** `VOX_ARCH=effb0`, 60 min on a laptop GPU (19 epochs, batch 8, lr 5e-4),
+  last epoch kept. Only on the training part of the held-out-location split
+  (`voxhod_g`, 55% of the tiles), so it saw **less** data than v3 and nano.
+  Export: `scripts/export_large.py`.
+- **Files:** `voxhod_large_int8.tflite` (5.2 MB, post-training quantized, full int8) and
+  `voxhod_large.h5` (float).
+
+**What is measured: the float model only.** Threshold chosen on the held-out validation
+split (val recall 78.1%), then scored on test. The nano rows are the mean of 8 runs of the
+nano recipe trained on the same split (int8), so the comparison is on equal data.
+
+| Measure | Nano recipe, same split (8 runs) | v3 size, same split (3 runs) | **Large, float** |
+|---|---:|---:|---:|
+| HERIDAL test recall at 0.1 false alarms per tile | 66.0% | 66.0% | **84.1%** |
+| HERIDAL test recall at 0.2 false alarms per tile | 74.7% | 74.6% | **87.1%** |
+| HERIDAL test recall at 0.3 false alarms per tile | 77.6% | 77.3% | **88.2%** |
+| HERIDAL test false alarms per tile at 78% recall | 0.32 | 0.33 | **0.036** |
+| Large at its val-chosen threshold (0.34): HERIDAL recall / precision | | | 79.8% / 67.0% |
+| NOMAD false alarms per empty tile, val-matched threshold | 0.84 | 0.88 | **0.14** |
+| WiSARD recall / false alarms per tile, val-matched threshold | 58.1% / 0.29 | 50.5% / 0.33 | 53.6% / **0.03** |
+| WiSARD recall on 8-16 px people | 30.7% | 31.8% | **22.6%** (worse) |
+
+**Not measured yet:**
+
+- **The int8 file's accuracy.** Post-training quantization usually costs little, but this
+  file was not scored; use the float `.h5` if exact numbers matter. Only a quick check was
+  done: on 40 test tiles with people, int8 and float flag the same 39 tiles at 0.34, and
+  their heatmaps correlate at 0.91.
+- **Speed and memory on any microcontroller.** On a laptop CPU (TFLite, 2 threads) one tile
+  takes about 0.4 s, against a few ms for nano, so on an ESP32-P4 it is expected to take
+  seconds per tile (estimate). Do not plan on it scanning every tile on the device.
+- Repeat runs: one training run only.
+
+Why it is better: the gain comes from the ImageNet pretraining, not from size. A v3-size
+model trained from scratch (2.6× nano) is no better than nano. Distilling Large into nano
+did not transfer the gain (8 vs 8 runs, 2026-11-12). Large finds fewer of the smallest
+people on WiSARD, probably because it sees the 160 px tile upscaled.
 
 ### False alarms on unseen terrain (NOMAD)
 
@@ -403,6 +453,8 @@ are compared at matched operating points instead; see
 | NQ, NC30, S05d | 2026-11-09 | nano + QAT; nano + 30 min; a 4th from-scratch run | see Experiments | see Experiments | not published: picked on validation, it lost recall |
 | GA1–3, GB1–3 | 2026-11-10 | nano recipe on a held-out-location split (55% of the tiles); GB adds 2,000 empty NOMAD tiles | see Experiments | see Experiments | recipe comparison only, not publishable: smaller training set |
 | K1–3 L/B | 2026-11-11 | nano recipe, 3 seeds, last epoch vs best validation-loss epoch | see Experiments | see Experiments | last epoch kept: best epoch lost ~3 points of recall |
+| D1–8, K4–8 | 2026-11-12 | nano distilled from an ImageNet EfficientNet-B0 teacher, 8 runs against 8 without | see Experiments | see Experiments | not published: no gain (HERIDAL recall at 0.3 false alarms per tile −0.1 points, 95% −2.9 / +2.4) |
+| **Large** | 2026-11-13 | EfficientNet-B0 backbone (ImageNet), 4.4 M parameters, held-out-location split | float: 79.8% / 67.0% at 0.34 | float: 53.6% / 77.2% at 0.34 | **on Hugging Face**; int8 file and device speed not measured |
 
 n/m: not measured. v1 picked its weights by validation loss, but validation
 tiles are mostly empty and training tiles mostly people, so the lowest loss
@@ -419,9 +471,10 @@ adds drone footage by Ferhat Tatık (v2: HERIDAL 85.2% / 19.4%, WiSARD 70.5% /
   <img alt="VoxHOD roadmap: next steps, this week and later, each with its gate" src="docs/roadmap-voxhod-light.svg">
 </picture>
 
-Rule for every step: **the device model does not grow** beyond 197 KB (v3)
-and 75 KB (nano). Larger models are only allowed as teachers. A step ships
-only if it passes its gate.
+Rule for every step: **the microcontroller models do not grow** beyond 197 KB (v3)
+and 75 KB (nano). Since 2026-11-13 a separate, larger tier exists
+([VoxHOD Large](#voxhod-large)) for hardware that is not a microcontroller or as a second
+stage; it does not replace v3 or nano. A step ships only if it passes its gate.
 
 Every gate is checked at matched operating points (threshold chosen on validation, see
 [Experiments](#experiments-fewer-false-alarms-without-losing-people-2026-11-08-and-09)).
@@ -440,7 +493,7 @@ From 2026-11-11 on, for new experiments only (results before that keep their ver
 
 | Step | Why | Gate to ship | Status |
 |---|---|---|---|
-| Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. Next: a larger teacher model (distillation), and more varied empty terrain with clear licences |
+| Fewer false alarms without losing people | 89% of false alarms are on empty tiles; on unseen terrain (NOMAD) v3 raises 1.3 per empty tile | Test recall not lower (95% interval above −1.5 points), WiSARD recall not lower, fewer false alarms on HERIDAL and NOMAD | **tried 2026-11-08/09, not passed:** hard negatives, a 1.5× weight on missed people and plain extra training all lowered recall. **2026-11-12:** distillation from an ImageNet EfficientNet-B0 teacher gave no gain over 8 runs, but the teacher itself has 6-9× fewer false alarms and is published as [Large](#voxhod-large). Next: pretraining nano itself on more aerial data, and a two-stage setup (nano ranks tiles, Large checks the top few) |
 | More varied aerial data with clear licences (full WiSARD, SeaDronesSee for water) | Recall falls by about 20 points on WiSARD; false alarms quadruple on NOMAD | WiSARD recall above 61.3% without losing HERIDAL recall | open |
 | Better recall on small people | 77% on 8-16 px people against 90% on larger ones | ≥ 85% on 8-16 px, same file size | planned |
 | A larger validation split | 317 validation people cannot place models at the same operating point: matched there, their test recall spreads from 77% to 87% | Thresholds chosen on validation land within ±1 point of the target recall on test | **done 2026-11-10, gate not met:** held-out locations, 739 people; spread down to 5.4 points (76–81.5%), ±3 points. Next: retrain v3 and nano on the new split so published files can be compared on it |
@@ -540,8 +593,9 @@ frames were used in training in the unpublished 2026-11-10 experiment (GB runs).
 
 Code: [Apache License 2.0](LICENSE) since 2026-11-11 (earlier commits, up to `82a0325`, were
 MIT). If you redistribute the code or a work based on it, keep the [NOTICE](NOTICE) file and
-credit "VoxHOD by Erdem Aslan" with a link to this repository. Trained weights (v3 and nano): CC BY 4.0 with HERIDAL attribution;
-see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
+credit "VoxHOD by Erdem Aslan" with a link to this repository. Trained weights (v3, nano and
+Large): CC BY 4.0 with HERIDAL attribution; Large also contains EfficientNet-B0 ImageNet
+weights from Keras (Apache 2.0, © Google), see [MODEL_LICENSE.md](MODEL_LICENSE.md). Trained weights are published at
 [inviolus/VoxHOD](https://huggingface.co/inviolus/VoxHOD).
 
 VoxHOD is a general-purpose aerial person detector. Search and rescue is the

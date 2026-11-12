@@ -12,6 +12,21 @@ The **trained VoxHOD weights** (`voxhod.keras`, `voxhod_int8.tflite`,
 | HERIDAL, Božić-Štulić et al., Zenodo record 5662351 | CC BY 3.0 | training, validation, test |
 | WiSARD sample, Broyles, Hayner, Leung | MIT wording on the dataset site | external test only, never trained on |
 
+## VoxHOD Large
+
+`voxhod_large_int8.tflite` and `voxhod_large.h5` are also released under **CC BY 4.0**, trained
+on HERIDAL only (as above). In addition they contain a modified copy of the **EfficientNet-B0**
+ImageNet weights shipped with Keras (`keras.applications.EfficientNetB0`), Copyright Google LLC,
+licensed under the [Apache License 2.0](LICENSE). Changes: a detection head was added and the
+whole network was fine-tuned on HERIDAL. Google does not endorse this model.
+
+EfficientNet: M. Tan, Q. V. Le, "EfficientNet: Rethinking Model Scaling for Convolutional
+Neural Networks", ICML 2019.
+
+Note: the backbone weights were pretrained by Google on ImageNet. ImageNet's images are
+distributed for non-commercial research; whether those terms extend to weights trained on them
+is legally unsettled. If you plan commercial use, check this for your case.
+
 HERIDAL attribution: D. Božić-Štulić, Ž. Marušić, S. Gotovac, "Deep Learning
 Approach in Aerial Imagery for Supporting Land Search and Rescue Missions",
 International Journal of Computer Vision, 2019.
