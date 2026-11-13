@@ -8,6 +8,7 @@ int8 and exist in TFLite Micro.
 
 Environment:
   VOX_DATA         folder with train.npz / val.npz from prepare_heridal.py
+  VOX_EXTRA_TRAIN  optional extra .npz (images/boxes/counts, e.g. from prepare_sard.py) appended to train
   VOX_ARTIFACTS    output folder (default ../artifacts)
   VOX_MAX_MINUTES  float training budget, cosine learning-rate decay over it
   VOX_LR           float base learning rate (default 2e-3; use a lower one with VOX_WARM_START)
@@ -135,7 +136,11 @@ def encode_targets(boxes: np.ndarray, counts: np.ndarray) -> np.ndarray:
 
 
 def load_split(name: str) -> tuple[np.ndarray, np.ndarray]:
-    data = np.load(DATA / f"{name}.npz")
+    data = dict(np.load(DATA / f"{name}.npz"))
+    if name == "train" and os.environ.get("VOX_EXTRA_TRAIN"):  # extra tiles (e.g. SARD), appended after the main ones
+        extra = np.load(os.environ["VOX_EXTRA_TRAIN"])
+        data = {k: np.concatenate([data[k], extra[k]]) for k in ("images", "boxes", "counts")}
+        print(f"Extra training tiles: {len(extra['counts'])} from {os.environ['VOX_EXTRA_TRAIN']}", flush=True)
     targets = encode_targets(data["boxes"], data["counts"])
     if name == "train" and os.environ.get("VOX_TEACHER_HEAT"):  # 5th channel: teacher heatmap
         teacher = np.load(os.environ["VOX_TEACHER_HEAT"]).astype(np.float32)
