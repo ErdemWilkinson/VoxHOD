@@ -8,6 +8,9 @@ person is) plus a few random empty ones. Validation, test and WiSARD stay untouc
 
     python scripts/mine_negatives.py <heridal_voc> <base_dir> <model.h5> <out_dir> [hard] [random]
 
+VOX_PHOTOS=<list> restricts to the photos named in the list; VOX_NEG_ONLY=1 writes only the new
+empty tiles to <out_dir>/neg.npz (for train.py VOX_EXTRA_TRAIN).
+
 <base_dir> holds the existing train/val/test/wisard .npz; <out_dir> gets the new
 train.npz and links to the other splits. Images stay below TensorFlow's 2 GB tensor
 limit, which caps how many tiles can be added.
@@ -36,6 +39,10 @@ def main() -> None:
     rng = np.random.default_rng(1)
     new_tiles, scores_kept = [], []
     names = split_names(root, "train")
+    if os.environ.get("VOX_PHOTOS"):  # restrict to a photo list (e.g. the voxhod_g training photos)
+        keep = set(Path(os.environ["VOX_PHOTOS"]).read_text().split())
+        names = [n for n in names if n in keep]
+        print(f"{len(names)} photos from {os.environ['VOX_PHOTOS']}", flush=True)
     for index, name in enumerate(names):
         image, boxes = load(root, name)
         width, height = image.size
@@ -64,6 +71,11 @@ def main() -> None:
         if index % 200 == 0:
             print(f"  {index}/{len(names)} photos, {len(new_tiles)} negatives, median hard score {np.median(scores_kept):.3f}", flush=True)
 
+    if os.environ.get("VOX_NEG_ONLY"):  # only the new empty tiles, for VOX_EXTRA_TRAIN
+        np.savez(out / "neg.npz", images=np.stack(new_tiles).astype(np.uint8), boxes=np.zeros((0, 4), np.float32),
+                 counts=np.zeros(len(new_tiles), np.int32))
+        print(f"neg: {len(new_tiles)} empty tiles, hard-negative score median {np.median(scores_kept):.3f}")
+        return
     data = np.load(base / "train.npz")
     images = np.concatenate([data["images"], np.stack(new_tiles).astype(np.uint8)])
     counts = np.concatenate([data["counts"], np.zeros(len(new_tiles), np.int32)])
