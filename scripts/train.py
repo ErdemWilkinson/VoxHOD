@@ -44,6 +44,8 @@ GRID = TILE // STRIDE
 WIDTH = float(os.environ.get("VOX_WIDTH", "1"))  # filter multiplier for smaller models
 POS_WEIGHT = float(os.environ.get("VOX_POS_WEIGHT", "1"))  # >1 weights person centres up (favours recall)
 ARCH = os.environ.get("VOX_ARCH", "voxhod")
+HEAT_ONLY = os.environ.get("VOX_HEAT_ONLY") == "1"
+BALANCED_LOSS = os.environ.get("VOX_BALANCED_LOSS") == "1"
 KD_WEIGHT = float(os.environ.get("VOX_KD_WEIGHT", "1"))
 BATCH = int(os.environ.get("VOX_BATCH", "32"))
 if os.environ.get("VOX_SEED"):
@@ -90,6 +92,8 @@ def build_teacher() -> tf.keras.Model:
     p = conv_bn(p, 96, 3)                                  # 40
     heat = tf.keras.layers.Conv2D(1, 1, activation="sigmoid", name="heat",
                                   bias_initializer=tf.keras.initializers.Constant(-2.19))(p)
+    if HEAT_ONLY:
+        return tf.keras.Model(image, heat)
     size = tf.keras.layers.Conv2D(2, 1, name="size")(p)
     return tf.keras.Model(image, tf.keras.layers.Concatenate(name="detections")([heat, size]))
 
@@ -112,6 +116,8 @@ def build_model() -> tf.keras.Model:
     p = conv_bn(p, w(64), 3)
     heat = tf.keras.layers.Conv2D(1, 1, activation="sigmoid", name="heat",
                                   bias_initializer=tf.keras.initializers.Constant(-2.19))(p)
+    if HEAT_ONLY:
+        return tf.keras.Model(image, heat)
     size = tf.keras.layers.Conv2D(2, 1, name="size")(p)
     return tf.keras.Model(image, tf.keras.layers.Concatenate(name="detections")([heat, size]))
 
@@ -154,11 +160,17 @@ def detection_loss(target, output):
     heat, mask = target[..., 0], target[..., 3]
     pred = tf.clip_by_value(output[..., 0], 1e-4, 1 - 1e-4)
     positive = tf.cast(tf.equal(heat, 1.0), tf.float32)
-    focal = -(POS_WEIGHT * positive * (1 - pred) ** 2 * tf.math.log(pred)
-              + (1 - positive) * (1 - heat) ** 4 * pred ** 2 * tf.math.log(1 - pred))
+    pos_focal = -POS_WEIGHT * positive * (1 - pred) ** 2 * tf.math.log(pred)
+    neg_focal = -(1 - positive) * (1 - heat) ** 4 * pred ** 2 * tf.math.log(1 - pred)
     count = tf.maximum(tf.reduce_sum(positive), 1.0)
-    size = tf.reduce_sum(mask[..., None] * tf.abs(output[..., 1:3] - target[..., 1:3]))
-    loss = tf.reduce_sum(focal) / count + 0.1 * size / count
+    if BALANCED_LOSS:
+        tiles = tf.cast(tf.shape(target)[0], tf.float32)
+        loss = tf.reduce_sum(pos_focal) / count + tf.reduce_sum(neg_focal) / tiles
+    else:
+        loss = tf.reduce_sum(pos_focal + neg_focal) / count
+    if output.shape[-1] >= 3:
+        size = tf.reduce_sum(mask[..., None] * tf.abs(output[..., 1:3] - target[..., 1:3]))
+        loss += 0.1 * size / count
     if target.shape[-1] > 4:  # distillation: match the teacher's heatmap everywhere, per tile
         tiles = tf.cast(tf.shape(target)[0], tf.float32)  # (per centre it was ~20x the focal term)
         loss += KD_WEIGHT * tf.reduce_sum((output[..., 0] - target[..., 4]) ** 2) / tiles
